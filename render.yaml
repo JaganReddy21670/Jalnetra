@@ -1,0 +1,23 @@
+# One-click deploy on Render (https://render.com): New → Blueprint → pick this GitHub repo.
+services:
+  - type: web
+    name: jalnetra
+    runtime: node
+    plan: starter            # a persistent disk needs a paid plan (free plans wipe data on restart)
+    region: singapore        # closest Render region to India
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /login
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATA_DIR
+        value: /var/data
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: ADMIN_SETUP_CODE
+        sync: false          # Render asks you for this; it is needed to create the first Administrator
+    disk:
+      name: jalnetra-data
+      mountPath: /var/data
+      sizeGB: 1

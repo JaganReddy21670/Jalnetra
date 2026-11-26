@@ -1,0 +1,156 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  background: #eef1f7;
+  color: #1c1c1e;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.01em;
+}
+
+@layer components {
+  /* Frosted glass surfaces */
+  .glass {
+    @apply border border-white/70 bg-white/55 shadow-glass backdrop-blur-2xl backdrop-saturate-[1.8];
+  }
+  .glass-strong {
+    @apply border border-white/80 bg-white/75 shadow-glass backdrop-blur-2xl backdrop-saturate-[1.8];
+  }
+  .glass-dark {
+    @apply border border-white/10 bg-[#1c1c1e]/70 text-white backdrop-blur-2xl backdrop-saturate-150;
+  }
+  .large-title {
+    @apply text-[28px] font-bold leading-tight tracking-[-0.022em] text-ios-label sm:text-[34px];
+  }
+  .section-label {
+    @apply text-[13px] font-medium uppercase tracking-[0.02em] text-ios-gray;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+.scrollbar-thin::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(60, 60, 67, 0.2);
+  border-radius: 9999px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise {
+    animation: none;
+  }
+}
+
+/* Leaflet popups, iOS style */
+.fc-popup .leaflet-popup-content-wrapper {
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(31, 41, 79, 0.18);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(20px);
+}
+.fc-popup .leaflet-popup-content { margin: 12px 14px; }
+.leaflet-container { font-family: inherit; background: #eef1f7; }
+
+/* 3D map markers & popups */
+.fc-marker {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  background: var(--c);
+  border: 3px solid #fff;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+.fc-marker::after {
+  content: "";
+  position: absolute;
+  inset: -9px;
+  border-radius: 9999px;
+  background: var(--c);
+  opacity: 0.35;
+  animation: fc-pulse 2s ease-out infinite;
+  z-index: -1;
+}
+@keyframes fc-pulse {
+  0% { transform: scale(0.5); opacity: 0.5; }
+  100% { transform: scale(1.4); opacity: 0; }
+}
+.fc-popup3d .maplibregl-popup-content {
+  border-radius: 16px;
+  padding: 12px 14px;
+  box-shadow: 0 12px 40px rgba(31, 41, 79, 0.22);
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(20px);
+}
+.maplibregl-ctrl-group {
+  border-radius: 14px !important;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(31, 41, 79, 0.15) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fc-marker::after { animation: none; }
+}
+
+/* ---------- JalNetra logo animations ---------- */
+.jn-animated .jn-wave { animation: jn-wave 6s linear infinite; }
+.jn-animated .jn-drop { animation: jn-float 3.2s ease-in-out infinite; transform-origin: 32px 34px; }
+.jn-animated .jn-eye { animation: jn-blink 7s ease-in-out infinite; transform-origin: 32px 31px; }
+@keyframes jn-wave { from { transform: translateX(0); } to { transform: translateX(-64px); } }
+@keyframes jn-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1.6px); } }
+@keyframes jn-blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0.12); } }
+
+/* Ripples spreading out behind the logo (sign-in screen) */
+.jn-ripple {
+  position: absolute;
+  inset: 0;
+  border-radius: 28px;
+  border: 2px solid rgba(0, 122, 255, 0.35);
+  animation: jn-ripple 3.6s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+.jn-ripple:nth-child(2) { animation-delay: 1.2s; }
+.jn-ripple:nth-child(3) { animation-delay: 2.4s; }
+@keyframes jn-ripple {
+  0% { transform: scale(1); opacity: 0.9; border-radius: 28px; }
+  100% { transform: scale(2.6); opacity: 0; border-radius: 50%; }
+}
+
+/* Letters of the name rising in one by one */
+.jn-letter {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(14px);
+  animation: jn-letter 600ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@keyframes jn-letter { to { opacity: 1; transform: none; } }
+
+/* Gradient shimmer on the word "Netra" */
+.jn-shimmer {
+  background: linear-gradient(90deg, #007AFF, #30B0C7, #5856D6, #007AFF);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: jn-shimmer 6s ease-in-out infinite;
+}
+@keyframes jn-shimmer { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+
+/* Logo entrance */
+.jn-pop { animation: jn-pop 700ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+@keyframes jn-pop { from { opacity: 0; transform: scale(0.6) rotate(-8deg); } to { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .jn-animated .jn-wave, .jn-animated .jn-drop, .jn-animated .jn-eye, .jn-ripple, .jn-shimmer, .jn-pop { animation: none; }
+  .jn-ripple { display: none; }
+  .jn-letter { animation: none; opacity: 1; transform: none; }
+}

@@ -1,0 +1,15 @@
+node_modules
+.next
+next-env.d.ts
+
+# secrets & local data — never commit
+.env
+.env*.local
+data/
+data-backup*/
+
+# local tools / editor
+.tools/
+.vscode/
+*.log
+*.tsbuildinfo

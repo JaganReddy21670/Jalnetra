@@ -4,7 +4,7 @@ import path from "path";
 import { promisify } from "util";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { DATA_DIR, mutate, readDB, toPublic, usingPostgres, type DB, type UserRecord } from "./db";
+import { DATA_DIR, mutate, readDB, toPublic, usingDatabase, type DB, type UserRecord } from "./db";
 
 const scrypt = promisify(_scrypt) as (pw: string, salt: string, len: number) => Promise<Buffer>;
 export const SESSION_COOKIE = "fc_session";
@@ -14,7 +14,7 @@ let secretCache: string | null = null;
 async function secret() {
   if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
   if (secretCache) return secretCache;
-  if (usingPostgres()) {
+  if (usingDatabase()) {
     // Serverless hosts have no writable disk: keep the generated key in the database.
     secretCache = await mutate((db) => (db.settings.sessionSecret ??= randomBytes(32).toString("hex")));
     return secretCache;

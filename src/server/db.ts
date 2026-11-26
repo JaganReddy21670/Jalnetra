@@ -33,8 +33,10 @@ export const EXCEL_FILE = path.join(DATA_DIR, `${APP_SLUG}-Devices.xlsx`);
 
 const empty = (): DB => ({ settings: {}, users: [], devices: [], inspections: [], audit: [] });
 
-/** Postgres when DATABASE_URL is set (Vercel/Neon); otherwise a local JSON file. */
-export const usingPostgres = () => !!(process.env.DATABASE_URL || process.env.POSTGRES_URL);
+/** Cloudflare D1 when STORAGE=d1 (set in wrangler.jsonc); otherwise a local JSON file. */
+export const usingD1 = () => process.env.STORAGE === "d1";
+/** True when data lives in a hosted database instead of the local data/ folder. */
+export const usingDatabase = usingD1;
 
 /** Fill defaults and upgrade records written by older versions. */
 function normalize(raw: unknown): DB {
@@ -51,32 +53,10 @@ function normalize(raw: unknown): DB {
   return db;
 }
 
-// ---------- Postgres ----------
-type PgPool = import("pg").Pool;
-const g = globalThis as unknown as { __jnPool?: PgPool; __jnTable?: Promise<void> };
-
-async function pool(): Promise<PgPool> {
-  if (!g.__jnPool) {
-    const { Pool } = await import("pg");
-    const url = process.env.DATABASE_URL || process.env.POSTGRES_URL!;
-    const local = /localhost|127\.0\.0\.1/.test(url);
-    g.__jnPool = new Pool({ connectionString: url, max: Number(process.env.PG_POOL_MAX || 3), ssl: local ? undefined : { rejectUnauthorized: false } });
-  }
-  if (!g.__jnTable) {
-    const { ensureTable } = await import("./pgstore");
-    g.__jnTable = ensureTable(g.__jnPool).catch((e) => {
-      g.__jnTable = undefined;
-      throw e;
-    });
-  }
-  await g.__jnTable;
-  return g.__jnPool;
-}
-
 export async function readDB(): Promise<DB> {
-  if (usingPostgres()) {
-    const { readDoc } = await import("./pgstore");
-    return normalize(await readDoc(await pool()));
+  if (usingD1()) {
+    const { d1Read } = await import("./d1store");
+    return normalize(await d1Read());
   }
   try {
     return normalize(JSON.parse(await fs.readFile(DB_FILE, "utf8")));
@@ -90,19 +70,14 @@ export async function readDB(): Promise<DB> {
 let queue: Promise<unknown> = Promise.resolve();
 
 export function mutate<T>(fn: (db: DB) => T | Promise<T>): Promise<T> {
-  if (usingPostgres()) {
+  if (usingD1()) {
     return (async () => {
-      const { mutateDoc } = await import("./pgstore");
-      const client = await (await pool()).connect();
-      try {
-        return await mutateDoc(client, empty(), async (doc) => {
-          const db = normalize(doc);
-          const result = await fn(db);
-          return { doc: db, result };
-        });
-      } finally {
-        client.release();
-      }
+      const { d1Mutate } = await import("./d1store");
+      return d1Mutate(empty(), async (doc) => {
+        const db = normalize(doc);
+        const result = await fn(db);
+        return { doc: db, result };
+      });
     })();
   }
   const run = queue.then(async () => {

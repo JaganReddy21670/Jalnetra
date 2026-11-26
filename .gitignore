@@ -17,3 +17,5 @@ data-backup*/
 .vercel
 .env*
 .wrangler/
+.open-next/
+.dev.vars

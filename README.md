@@ -1,6 +1,6 @@
 # JalNetra (Jal = water, Netra = eye): daily field device inspection
 
-Next.js 15 · Tailwind (glassmorphism, Apple HIG style) · local JSON store · ExcelJS.
+Next.js 15.5 · Tailwind (glassmorphism, Apple HIG style) · Cloudflare Workers + D1 (local runs use a JSON file) · ExcelJS.
 
 ## Run
 
@@ -76,42 +76,29 @@ Delete the `data/` folder to start fresh.
 | `src/components/ui.tsx` | Glass/Apple UI kit (segmented control, toggles, sheets, device icons) |
 | `src/lib/devices.ts` | Device-type catalogue and shared types |
 
-## Deploy
+## Deploy (Cloudflare)
 
-GitHub stores the code. A host runs it, because JalNetra needs a Node server (sign-in, saving checks, Excel, the email scheduler). GitHub Pages cannot run it.
+JalNetra runs on **Cloudflare Workers** (free plan) with its data in **Cloudflare D1**.
 
-### Vercel (free Hobby plan)
-Vercel has no permanent disk, so on Vercel JalNetra stores everything in **Postgres** (Neon's free tier). It switches automatically whenever `DATABASE_URL` is set.
+| What | Where |
+|---|---|
+| Main link | **https://jalnetra.pages.dev** (Pages project `jalnetra`, forwards to the app through a service binding) |
+| App Worker | `jalnetra-app` at https://jalnetra-app.jalnetra.workers.dev (config: `wrangler.jsonc`) |
+| Database | D1 `jalnetra-db` (APAC), one table `jalnetra_store` |
+| Weekly email | Cron Trigger `30 3 * * *` (09:00 IST) calls `/api/cron/weekly` |
+| Secrets | `ADMIN_SETUP_CODE`, `SESSION_SECRET`, `CRON_SECRET` (`npx wrangler secret put NAME`) |
 
-1. Push this repo to GitHub.
-2. On https://vercel.com choose **Add New → Project**, import the repo and click **Deploy**. The first deploy may show errors until step 3 is done.
-3. In the project, open **Storage → Create Database → Neon (Postgres)**, choose the **Singapore (sin1)** region (closest to India) and connect it. This adds `DATABASE_URL` automatically.
-4. Under **Settings → Environment Variables**, add:
-   - `ADMIN_SETUP_CODE`: any code you choose, needed once to create the first Administrator
-   - `SESSION_SECRET`: a long random string
-   - `CRON_SECRET`: a long random string (protects the weekly-email trigger)
-5. **Deployments → Redeploy.** Open `https://<project>.vercel.app`.
-
-Notes: functions run in Singapore next to the database (`vercel.json`). On the Hobby plan, Vercel Cron runs once a day (09:00 IST), so the weekly email goes out around 9 AM on the chosen day. The Excel workbook is generated fresh on every download.
-
-### Cloudflare relay (for networks that block vercel.app)
-Some ISPs and campus networks block `*.vercel.app`. The free Worker in `cloudflare-proxy/` forwards everything (cookies and redirects included) to the Vercel app:
-
-- **Live link: https://jalnetra.pages.dev** (Cloudflare Pages, `cloudflare-proxy/pages/_worker.js`; deploy with `npx wrangler pages deploy cloudflare-proxy/pages --project-name jalnetra --branch main`)
-- Backup link: https://jalnetra.jalnetra.workers.dev (Worker in `cloudflare-proxy/worker.js`)
-- Redeploy: `cd cloudflare-proxy && npx wrangler deploy`. Change `ORIGIN` in `wrangler.toml` if the Vercel URL changes.
-
-### Render (deploys from GitHub)
-1. Push this repo to GitHub (it can be private).
-2. On https://render.com choose **New → Blueprint** and pick the repo. `render.yaml` sets up everything: a Node web service, a 1 GB persistent disk at `/var/data` and a generated `SESSION_SECRET`.
-3. When asked, enter an **ADMIN_SETUP_CODE**. You'll type it once to create the first Administrator.
-4. Open the `https://jalnetra.onrender.com` URL. Every `git push` redeploys automatically.
-
-> The persistent disk needs Render's Starter plan (about US$7/month). On a free plan, all data is wiped on every restart.
-
-### Any server / VPS
+### Deploy an update
 ```bash
-npm ci && npm run build
-ADMIN_SETUP_CODE=XXXXXXXX DATA_DIR=/srv/jalnetra-data npm start   # listens on $PORT (default 3000)
+npm run cf:deploy          # builds with OpenNext and deploys the Worker
 ```
-Put it behind HTTPS (for example Caddy or nginx). HTTPS is required for the GPS "Auto" button on phones.
+The `jalnetra.pages.dev` forwarder (`cloudflare-proxy/pages/`) only needs redeploying if it changes:
+`cd cloudflare-proxy/pages && npx wrangler pages deploy --branch main`.
+
+### Test locally in the Workers runtime
+Create `.dev.vars` with the three secrets, then `npm run cf:build && npx wrangler dev --local` (this uses a local D1 copy).
+
+### Back up the database
+```bash
+npx wrangler d1 export jalnetra-db --remote --output jalnetra-backup.sql
+```

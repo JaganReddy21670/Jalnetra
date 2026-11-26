@@ -122,7 +122,7 @@ export function resolveNewRole(db: DB, wanted: unknown, code: unknown, email: st
   }
   if (!hasAdmin) {
     // Public deployments set ADMIN_SETUP_CODE so a stranger can't claim the first admin slot.
-    if (setup) return { error: "Enter the setup code to create the first Administrator account." };
+    if (setup) return { error: given ? "That setup code is incorrect. Check it and try again." : "Enter the setup code to create the first Administrator account." };
     ensureAdminCode(db);
     return { role: "admin" };
   }

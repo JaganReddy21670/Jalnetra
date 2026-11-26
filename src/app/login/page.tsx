@@ -181,7 +181,7 @@ export default function LoginPage() {
           {needCode && (
             <div className="mt-4">
               <Field label={cfg?.adminExists ? "Admin access code" : "Setup code"} hint={cfg?.adminExists ? "Ask an existing administrator. It's shown on their Settings page." : "The one-time setup code given to the person who installed JalNetra."}>
-                <input className={clsx(inputCls, "font-mono uppercase tracking-[0.2em]")} value={adminCode} onChange={(e) => setAdminCode(e.target.value.toUpperCase())} placeholder="XXXXXXXX" maxLength={8} />
+                <input className={clsx(inputCls, "font-mono uppercase tracking-[0.2em]")} value={adminCode} onChange={(e) => setAdminCode(e.target.value.replace(/\s+/g, "").toUpperCase())} placeholder="8 characters" maxLength={8} inputMode="text" autoComplete="off" spellCheck={false} />
               </Field>
             </div>
           )}

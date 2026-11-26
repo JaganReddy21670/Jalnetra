@@ -15,4 +15,5 @@ export function middleware(req: NextRequest) {
   return NextResponse.next();
 }
 
-export const config = { matcher: ["/((?!_next/|favicon.ico|icon.svg).*)"] };
+// Public files: Next assets, icons, web app manifest, service worker, Android app links.
+export const config = { matcher: ["/((?!_next/|favicon.ico|icon.svg|icon-|apple-touch-icon|manifest.webmanifest|sw.js|\.well-known/).*)"] };

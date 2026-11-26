@@ -19,3 +19,6 @@ data-backup*/
 .wrangler/
 .open-next/
 .dev.vars
+
+# Android signing key + builds (never commit)
+android-release/

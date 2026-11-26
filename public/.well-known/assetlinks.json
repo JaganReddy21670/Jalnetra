@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "app.jalnetra.twa",
+        "sha256_cert_fingerprints": ["A4:F9:50:4B:2C:9F:1E:F4:63:F5:61:96:DA:D4:75:A0:CA:D6:99:D1:BF:71:27:72:5D:87:E4:64:8E:35:5D:B9"]
+      }
+    }]

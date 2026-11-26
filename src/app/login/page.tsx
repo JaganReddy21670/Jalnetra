@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import Script from "next/script";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, useSession } from "@/components/session";
-import { Button, Field, Segmented, inputCls } from "@/components/ui";
+import { Button, Field, Segmented, Sheet, inputCls } from "@/components/ui";
 import type { PublicUser, Role } from "@/lib/devices";
 import { APP_NAME } from "@/lib/brand";
 import { Logo } from "@/components/Logo";
@@ -41,6 +41,28 @@ export default function LoginPage() {
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [forgot, setForgot] = useState(false);
+  const [fCode, setFCode] = useState("");
+  const [fPw, setFPw] = useState("");
+  const [fBusy, setFBusy] = useState(false);
+  const [fMsg, setFMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function resetAdmin() {
+    setFBusy(true);
+    setFMsg(null);
+    try {
+      await api("POST", "/api/auth/reset-admin", { email, code: fCode, newPassword: fPw });
+      setFMsg({ ok: true, text: "Password changed. You can sign in with your new password now." });
+      setPassword("");
+      setFCode("");
+      setFPw("");
+      setMode("Sign In");
+    } catch (e) {
+      setFMsg({ ok: false, text: (e as Error).message });
+    } finally {
+      setFBusy(false);
+    }
+  }
   const [cfg, setCfg] = useState<{ googleClientId: string | null; adminExists: boolean; adminCodeRequired?: boolean } | null>(null);
   const [gsiReady, setGsiReady] = useState(false);
   const gBtn = useRef<HTMLDivElement>(null);
@@ -230,8 +252,45 @@ export default function LoginPage() {
               {creating ? `Create ${sel?.title} Account` : "Sign In"}
             </Button>
           </form>
+
+          {!creating && (
+            <button
+              type="button"
+              onClick={() => { setForgot(true); setFMsg(null); }}
+              className="mt-4 w-full text-center text-[14px] font-medium text-ios-blue hover:underline"
+            >
+              Forgot password?
+            </button>
+          )}
         </div>
       )}
+      <Sheet open={forgot} onClose={() => setForgot(false)} title="Reset password">
+        {role === "admin" ? (
+          <div className="space-y-4">
+            <p className="text-[14px] text-ios-gray">
+              Enter your Administrator email, the <b className="text-ios-label">setup code</b> and a new password.
+            </p>
+            <Field label="Administrator email">
+              <input className={inputCls} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" autoComplete="email" />
+            </Field>
+            <Field label="Setup code" hint="The 8-character code used to create the first Administrator">
+              <input className={clsx(inputCls, "font-mono uppercase tracking-[0.2em]")} value={fCode} onChange={(e) => setFCode(e.target.value.replace(/\s+/g, "").toUpperCase())} maxLength={8} placeholder="8 characters" autoComplete="off" spellCheck={false} />
+            </Field>
+            <Field label="New password" hint="At least 8 characters">
+              <input className={inputCls} type="password" value={fPw} onChange={(e) => setFPw(e.target.value)} autoComplete="new-password" />
+            </Field>
+            {fMsg && <p className={clsx("rounded-xl px-3 py-2 text-[13px] font-medium", fMsg.ok ? "bg-ios-green/12 text-[#248A3D]" : "bg-ios-red/10 text-[#D70015]")}>{fMsg.text}</p>}
+            <Button size="lg" className="w-full" loading={fBusy} disabled={!email.trim() || fCode.length < 8 || fPw.length < 8} onClick={resetAdmin}>
+              Set New Password
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-3 pb-2 text-[15px] leading-relaxed">
+            <p>Engineer passwords are reset by your <b>Administrator</b>.</p>
+            <p className="text-ios-gray">Ask them to open <b className="text-ios-label">Engineers</b>, tap your name and choose <b className="text-ios-label">Reset Password</b>. They&apos;ll give you a temporary password to sign in with.</p>
+          </div>
+        )}
+      </Sheet>
     </div>
   );
 }

@@ -17,6 +17,21 @@ export default function EngineersPage() {
   const insRes = useApi<{ inspections: Inspection[] }>(today ? `/api/inspections?from=${today}&to=${today}` : null);
   const [open, setOpen] = useState<PublicUser | null>(null);
   const [busy, setBusy] = useState(false);
+  const [tempPw, setTempPw] = useState<{ email: string; pw: string } | null>(null);
+
+  async function resetPassword(u: PublicUser) {
+    if (!window.confirm(`Reset ${u.name}'s password? Their current password will stop working.`)) return;
+    setBusy(true);
+    try {
+      const r = await api<{ email: string; tempPassword: string }>("POST", `/api/users/${u.id}/password`);
+      setTempPw({ email: r.email, pw: r.tempPassword });
+      toast("Password reset");
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const rows = useMemo(() => {
     const users = usersRes.data?.users ?? [];
@@ -117,12 +132,15 @@ export default function EngineersPage() {
 
       <Sheet
         open={!!detail}
-        onClose={() => setOpen(null)}
+        onClose={() => { setOpen(null); setTempPw(null); }}
         title={detail?.u.name ?? ""}
         footer={
           detail && detail.u.id !== me?.id ? (
             detail.u.role === "engineer" ? (
-              <Button variant="secondary" loading={busy} onClick={() => setRole(detail.u, "admin")}>Make Administrator</Button>
+              <>
+                <Button variant="secondary" loading={busy} onClick={() => resetPassword(detail.u)}>Reset Password</Button>
+                <Button variant="secondary" loading={busy} onClick={() => setRole(detail.u, "admin")}>Make Administrator</Button>
+              </>
             ) : (
               <Button variant="secondary" loading={busy} onClick={() => setRole(detail.u, "engineer")}>Change to Engineer</Button>
             )
@@ -131,6 +149,19 @@ export default function EngineersPage() {
       >
         {detail && (
           <div className="space-y-4">
+            {tempPw && tempPw.email === detail.u.email && (
+              <div className="rounded-2xl bg-ios-green/10 p-4 ring-1 ring-ios-green/25">
+                <p className="text-[14px] font-semibold text-[#248A3D]">New temporary password</p>
+                <button
+                  onClick={() => navigator.clipboard?.writeText(tempPw.pw).then(() => toast("Password copied")).catch(() => undefined)}
+                  className="mt-2 w-full rounded-xl bg-white px-4 py-2.5 text-left font-mono text-[20px] font-bold tracking-[0.12em] ring-1 ring-black/[0.06] hover:bg-white/80"
+                  title="Copy"
+                >
+                  {tempPw.pw}
+                </button>
+                <p className="mt-2 text-[12px] text-ios-gray">Give this to {detail.u.name.split(" ")[0]} to sign in. It&apos;s shown only once; the old password no longer works.</p>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-2 rounded-2xl bg-white/70 p-4 text-[13px] ring-1 ring-black/[0.05]">
               <div><div className="text-ios-gray">Email</div><div className="truncate font-semibold">{detail.u.email}</div></div>
               <div><div className="text-ios-gray">Sign-in</div><div className="font-semibold">{detail.u.provider === "google" ? "Google" : "Email & password"}</div></div>

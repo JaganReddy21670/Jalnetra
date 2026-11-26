@@ -79,7 +79,7 @@ export async function buildWorkbook(db: DB): Promise<ExcelJS.Workbook> {
       new Set(devs.map((d) => d.engineerId)).size,
       todays.length,
       todays.filter((i) => i.answers.condition === "Issue Detected").length,
-      devs.length - todays.length,
+      devs.filter((d) => dueOn(d, today) && !insByDevDay.has(`${d.id}|${today}`)).length,
     ]);
   }
   const totalRow = sum.addRow([

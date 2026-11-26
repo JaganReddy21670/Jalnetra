@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useMemo } from "react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useApi, useNow } from "@/components/session";
-import { Avatar, Badge, Button, Card, CardHeader, DayBadge, DeviceIcon, Empty, PageHeader, ProgressBar, ProgressRing, Spinner } from "@/components/ui";
+import { Avatar, Badge, Button, Card, CardHeader, DayBadge, DeviceIcon, Empty, PageHeader, ProgressBar, ProgressRing, Spinner, LoadError } from "@/components/ui";
 import { DEVICE_TYPES, type Device, type Inspection, type PublicUser } from "@/lib/devices";
 import { fmtDate, fmtTime, istParts } from "@/lib/format";
 import { dayState, dueOn, indexInspections, shiftDate, uptime, uptimeColor } from "@/lib/status";
@@ -27,7 +27,8 @@ export default function OverviewPage() {
     const states = devices.map((d) => ({ d, st: dayState(d, idx.get(`${d.id}|${today}`), today, now), ins: idx.get(`${d.id}|${today}`) }));
     const checked = states.filter((s) => s.ins).length;
     const issues = states.filter((s) => s.st === "issue").length;
-    const pending = devices.length - checked;
+    const dueToday = states.filter((s) => s.ins || dueOn(s.d, today)).length;
+    const pending = states.filter((s) => !s.ins && dueOn(s.d, today)).length;
     const engineerIds = new Set(devices.map((d) => d.engineerId));
     const trend = Array.from({ length: 14 }, (_, k) => {
       const date = shiftDate(today, -(13 - k));
@@ -53,9 +54,11 @@ export default function OverviewPage() {
     const uptimes = devices.map((d) => ({ d, u: uptime(d, idx, today) })).sort((a, b) => (a.u.pct ?? 101) - (b.u.pct ?? 101));
     const tot = uptimes.reduce((a, x) => ({ on: a.on + x.u.online, all: a.all + x.u.online + x.u.offline }), { on: 0, all: 0 });
     const fleetUptime = tot.all ? Math.round((tot.on / tot.all) * 100) : null;
-    return { users, devices, checked, issues, pending, engineers: engineerIds.size, pct: devices.length ? Math.round((checked / devices.length) * 100) : 0, trend, perEngineer, perType, attention, recent, uptimes, fleetUptime };
+    return { users, engineerCount: users.filter((u) => u.role === "engineer").length, adminCount: users.filter((u) => u.role === "admin").length, devices, checked, issues, pending, engineers: engineerIds.size, dueToday, pct: dueToday ? Math.round((checked / dueToday) * 100) : 0, trend, perEngineer, perType, attention, recent, uptimes, fleetUptime };
   }, [usersRes.data, devRes.data, insRes.data, now, today]);
 
+  const loadErr = usersRes.error || devRes.error || insRes.error;
+  if (loadErr) return <LoadError message={loadErr} onRetry={() => { usersRes.reload(); devRes.reload(); insRes.reload(); }} />;
   if (!data) return <div className="flex justify-center py-24"><Spinner /></div>;
   const userName = (id: string) => data.users.find((u) => u.id === id)?.name ?? "—";
   const devOf = (id: string) => data.devices.find((d) => d.id === id);
@@ -74,7 +77,7 @@ export default function OverviewPage() {
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Stat label="Active devices" value={data.devices.length} sub={`${data.perType.length} device types`} color="#007AFF" />
-        <Stat label="Engineers" value={data.engineers} sub={`${data.users.length} accounts`} color="#5856D6" />
+        <Stat label="Engineers" value={data.engineerCount} sub={`${data.engineers} with devices · ${data.adminCount} admin${data.adminCount === 1 ? "" : "s"}`} color="#5856D6" />
         <Stat label="Checked today" value={data.checked} sub={`${data.pending} still pending`} color="#34C759" />
         <Stat label="Offline today" value={data.issues} sub="Nodes not sending data" color="#FF3B30" />
       </div>
@@ -83,7 +86,7 @@ export default function OverviewPage() {
         <Card className="flex flex-col items-center p-6">
           <p className="section-label self-start">Today&apos;s completion</p>
           <div className="my-4">
-            <ProgressRing value={data.pct} label={`${data.checked} of ${data.devices.length}`} />
+            <ProgressRing value={data.pct} label={`${data.checked} of ${data.dueToday}`} />
           </div>
           <ProgressBar value={data.pct} />
         </Card>

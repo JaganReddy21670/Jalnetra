@@ -47,6 +47,8 @@ export interface DB {
     alerts?: AlertSettings;
     /** "<IST date>:<slot>" → ISO time sent. Prevents duplicate alerts; pruned to ~2 weeks. */
     alertLog?: Record<string, string>;
+    /** Wrong setup/admin code attempts, per purpose. Locks code entry for a while after too many. */
+    codeLock?: Record<string, { fails: number; until: number }>;
   };
   notifications?: AppNotification[];
   users: UserRecord[];
@@ -106,6 +108,7 @@ export function mutate<T>(fn: (db: DB) => T | Promise<T>): Promise<T> {
       return d1Mutate(empty(), async (doc) => {
         const db = normalize(doc);
         const result = await fn(db);
+        trimAudit(db);
         return { doc: db, result };
       });
     })();
@@ -113,6 +116,7 @@ export function mutate<T>(fn: (db: DB) => T | Promise<T>): Promise<T> {
   const run = queue.then(async () => {
     const db = await readDB();
     const result = await fn(db);
+    trimAudit(db);
     await fs.mkdir(DATA_DIR, { recursive: true });
     const tmp = `${DB_FILE}.tmp`;
     await fs.writeFile(tmp, JSON.stringify(db, null, 2), "utf8");
@@ -123,6 +127,12 @@ export function mutate<T>(fn: (db: DB) => T | Promise<T>): Promise<T> {
   });
   queue = run.catch(() => undefined);
   return run;
+}
+
+/** The audit log is write-only history; keep the newest entries so the single stored record stays small. */
+const AUDIT_KEEP = 1000;
+function trimAudit(db: DB) {
+  if (db.audit.length > AUDIT_KEEP) db.audit = db.audit.slice(-AUDIT_KEEP);
 }
 
 export const newId = (prefix: string) => `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`.toUpperCase();

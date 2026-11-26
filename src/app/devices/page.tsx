@@ -29,6 +29,7 @@ export default function DevicesPage() {
   const [busy, setBusy] = useState(false);
 
   const users = usersRes.data?.users ?? [];
+  const engineers = users.filter((u) => u.role === "engineer").sort((a, b) => a.name.localeCompare(b.name));
   // Engineers can only add the device types they were set up for.
   const allowedTypes = isAdmin || !user?.deviceTypes?.length ? DEVICE_TYPES : DEVICE_TYPES.filter((t) => user.deviceTypes!.includes(t.key));
   const nameOf = (id: string) => users.find((u) => u.id === id)?.name ?? (id === user?.id ? user?.name : "—");
@@ -51,6 +52,7 @@ export default function DevicesPage() {
 
   async function save() {
     if (!edit || !edit.name.trim() || !edit.location.trim() || coordsError(edit)) return;
+    if (isAdmin && !edit.engineerId) return toast("Choose the engineer who will check this device", "error");
     setBusy(true);
     try {
       if (edit.id) await api("PATCH", `/api/devices/${edit.id}`, { name: edit.name, ...locToApi(edit), ...(isAdmin ? { engineerId: edit.engineerId } : {}) });
@@ -88,7 +90,7 @@ export default function DevicesPage() {
         title={isAdmin ? "All Devices" : "My Devices"}
         subtitle={isAdmin ? `${counts.size ? [...counts.values()].reduce((a, b) => a + b, 0) : 0} active devices across ${counts.size} types` : "The devices you check every day"}
         actions={
-          <Button onClick={() => setEdit({ type: allowedTypes.some((t) => t.key === typeFilter) ? (typeFilter as DeviceTypeKey) : allowedTypes[0].key, name: "", location: "", lat: "", lng: "", engineerId: user!.id, active: true })}>
+          <Button onClick={() => setEdit({ type: allowedTypes.some((t) => t.key === typeFilter) ? (typeFilter as DeviceTypeKey) : allowedTypes[0].key, name: "", location: "", lat: "", lng: "", engineerId: isAdmin ? (engineers[0]?.id ?? "") : user!.id, active: true })}>
             <Plus className="h-4 w-4" strokeWidth={2.6} /> Add Device
           </Button>
         }
@@ -207,8 +209,10 @@ export default function DevicesPage() {
             {isAdmin && (
               <Field label="Assigned engineer">
                 <select className={inputCls} value={edit.engineerId} onChange={(e) => setEdit({ ...edit, engineerId: e.target.value })}>
-                  {users.map((u) => <option key={u.id} value={u.id}>{u.name}{u.role === "admin" ? " (admin)" : ""}</option>)}
+                  {!engineers.some((u) => u.id === edit.engineerId) && <option value={edit.engineerId}>{edit.engineerId ? `${nameOf(edit.engineerId)} (not an engineer)` : "Choose an engineer"}</option>}
+                  {engineers.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
                 </select>
+                {engineers.length === 0 && <span className="mt-1.5 block text-[12px] text-ios-red">No engineers yet. Engineers appear here after they create an account.</span>}
               </Field>
             )}
           </div>

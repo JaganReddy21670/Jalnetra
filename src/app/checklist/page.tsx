@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { SubmittedView } from "@/components/InspectionView";
 import { api, useApi, useNow, useSession } from "@/components/session";
-import { Button, Card, DayBadge, DeviceIcon, Empty, Field, PageHeader, ProgressRing, Sheet, Spinner, Toggle, inputCls, textareaCls } from "@/components/ui";
+import { Button, Card, DayBadge, DeviceIcon, Empty, Field, PageHeader, ProgressRing, Sheet, Spinner, Toggle, inputCls, textareaCls, LoadError } from "@/components/ui";
 import { DEADLINE_MIN, DEVICE_TYPES, OFFLINE_REASONS, deviceType, type Device, type Inspection } from "@/lib/devices";
 import { fmtDate, fmtTime, istParts } from "@/lib/format";
 import { dayState, dueOn } from "@/lib/status";
@@ -89,7 +89,9 @@ export default function ChecklistPage() {
     }
   }
 
-  if (devRes.loading || !now) return <div className="flex justify-center py-24"><Spinner /></div>;
+  const loadErr = (!devRes.data && devRes.error) || (!insRes.data && insRes.error);
+  if (loadErr) return <LoadError message={loadErr} onRetry={() => { devRes.reload(); insRes.reload(); }} />;
+  if (!devRes.data || !insRes.data || !now) return <div className="flex justify-center py-24"><Spinner /></div>;
 
   return (
     <>

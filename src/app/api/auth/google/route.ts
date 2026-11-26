@@ -44,6 +44,6 @@ export async function POST(req: Request) {
   });
   if ("error" in result) return fail(result.error!, result.status);
   const res = NextResponse.json({ user: toPublic(result.user) });
-  await createSessionCookie(res, result.user.id);
+  await createSessionCookie(res, result.user);
   return res;
 }

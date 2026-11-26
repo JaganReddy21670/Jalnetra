@@ -8,7 +8,7 @@ import { useApi, useNow, useSession } from "@/components/session";
 import { Avatar, Card, DayBadge, DeviceIcon, Empty, PageHeader, Sheet, Spinner } from "@/components/ui";
 import { DEVICE_TYPES, type Device, type Inspection, type PublicUser } from "@/lib/devices";
 import { fmtDate, fmtTime, istParts } from "@/lib/format";
-import { shiftDate } from "@/lib/status";
+import { dueOn, shiftDate } from "@/lib/status";
 
 const DAYS = 21;
 type Filter = "All" | "Online" | "Offline" | "Late";
@@ -40,7 +40,7 @@ export default function HistoryPage() {
     const active = (devRes.data?.devices ?? []).filter((d) => d.active && (!eng || d.engineerId === eng));
     const m = new Map<string, { done: number; expected: number; offline: number }>();
     for (const date of dates) {
-      const expected = active.filter((d) => istParts(new Date(d.createdAt)).date <= date).length;
+      const expected = active.filter((d) => dueOn(d, date)).length;
       const list = all.filter((i) => i.date === date);
       m.set(date, { done: list.length, expected, offline: list.filter((i) => i.answers.dataStatus === "Offline").length });
     }

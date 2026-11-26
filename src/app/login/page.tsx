@@ -203,7 +203,7 @@ export default function LoginPage() {
           {needCode && (
             <div className="mt-4">
               <Field label={cfg?.adminExists ? "Admin access code" : "Setup code"} hint={cfg?.adminExists ? "Ask an existing administrator. It's shown on their Settings page." : "The one-time setup code given to the person who installed JalNetra."}>
-                <input className={clsx(inputCls, "font-mono uppercase tracking-[0.2em]")} value={adminCode} onChange={(e) => setAdminCode(e.target.value.replace(/\s+/g, "").toUpperCase())} placeholder="8 characters" maxLength={8} inputMode="text" autoComplete="off" spellCheck={false} />
+                <input className={clsx(inputCls, "font-mono uppercase tracking-[0.2em]")} value={adminCode} onChange={(e) => setAdminCode(e.target.value.replace(/\s+/g, "").toUpperCase())} placeholder="Enter the code" maxLength={32} inputMode="text" autoComplete="off" spellCheck={false} />
               </Field>
             </div>
           )}
@@ -248,7 +248,7 @@ export default function LoginPage() {
 
             {error && <p className="rounded-xl bg-ios-red/10 px-3 py-2 text-[13px] font-medium text-[#D70015]">{error}</p>}
 
-            <Button type="submit" size="lg" className="w-full" loading={busy} disabled={needCode && adminCode.length < 8}>
+            <Button type="submit" size="lg" className="w-full" loading={busy} disabled={needCode && adminCode.length < 4}>
               {creating ? `Create ${sel?.title} Account` : "Sign In"}
             </Button>
           </form>
@@ -274,13 +274,13 @@ export default function LoginPage() {
               <input className={inputCls} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" autoComplete="email" />
             </Field>
             <Field label="Setup code" hint="The 8-character code used to create the first Administrator">
-              <input className={clsx(inputCls, "font-mono uppercase tracking-[0.2em]")} value={fCode} onChange={(e) => setFCode(e.target.value.replace(/\s+/g, "").toUpperCase())} maxLength={8} placeholder="8 characters" autoComplete="off" spellCheck={false} />
+              <input className={clsx(inputCls, "font-mono uppercase tracking-[0.2em]")} value={fCode} onChange={(e) => setFCode(e.target.value.replace(/\s+/g, "").toUpperCase())} maxLength={32} placeholder="Enter the code" autoComplete="off" spellCheck={false} />
             </Field>
             <Field label="New password" hint="At least 8 characters">
               <input className={inputCls} type="password" value={fPw} onChange={(e) => setFPw(e.target.value)} autoComplete="new-password" />
             </Field>
             {fMsg && <p className={clsx("rounded-xl px-3 py-2 text-[13px] font-medium", fMsg.ok ? "bg-ios-green/12 text-[#248A3D]" : "bg-ios-red/10 text-[#D70015]")}>{fMsg.text}</p>}
-            <Button size="lg" className="w-full" loading={fBusy} disabled={!email.trim() || fCode.length < 8 || fPw.length < 8} onClick={resetAdmin}>
+            <Button size="lg" className="w-full" loading={fBusy} disabled={!email.trim() || fCode.length < 4 || fPw.length < 8} onClick={resetAdmin}>
               Set New Password
             </Button>
           </div>

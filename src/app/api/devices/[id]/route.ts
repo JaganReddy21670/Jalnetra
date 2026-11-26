@@ -16,9 +16,12 @@ export async function PATCH(req: Request, { params }: Ctx) {
     if (g.user.role !== "admin" && d.engineerId !== g.user.id) return { error: "You can only edit your own devices", status: 403 };
     if (g.user.role !== "admin" && g.user.deviceTypes?.length && !g.user.deviceTypes.includes(d.type)) return { error: "You don't have access to this device type", status: 403 };
     const changes: string[] = [];
+    const dupName = (name: string, owner: string) => db.devices.some((x) => x.id !== d.id && x.active && x.engineerId === owner && x.name.toLowerCase() === name.toLowerCase());
     if (typeof body.name === "string" && body.name.trim() && body.name.trim() !== d.name) {
-      changes.push(`renamed to ${body.name.trim()}`);
-      d.name = body.name.trim().slice(0, 80);
+      const name = body.name.trim().slice(0, 80);
+      if (dupName(name, d.engineerId)) return { error: "A device with this name already exists", status: 409 };
+      changes.push(`renamed to ${name}`);
+      d.name = name;
     }
     if (typeof body.location === "string" && !body.location.trim()) return { error: "Deployment location is required", status: 400 };
     if (typeof body.location === "string" && body.location.trim() !== d.location) {
@@ -31,11 +34,15 @@ export async function PATCH(req: Request, { params }: Ctx) {
       applyGps(d, coords);
     }
     if (typeof body.active === "boolean" && body.active !== d.active) {
+      if (body.active && dupName(d.name, d.engineerId)) return { error: `Another active device is already called "${d.name}". Rename one of them first.`, status: 409 };
       changes.push(body.active ? "restored" : "removed");
       d.active = body.active;
     }
     if (g.user.role === "admin" && typeof body.engineerId === "string" && body.engineerId !== d.engineerId) {
-      if (!db.users.some((u) => u.id === body.engineerId)) return { error: "Engineer not found", status: 400 };
+      const owner = db.users.find((u) => u.id === body.engineerId);
+      if (!owner) return { error: "Engineer not found", status: 400 };
+      if (owner.role !== "engineer") return { error: "Devices must be assigned to an engineer", status: 400 };
+      if (dupName(d.name, owner.id)) return { error: `${owner.name} already has a device called "${d.name}"`, status: 409 };
       changes.push("reassigned");
       d.engineerId = body.engineerId;
       grantType(db, d.engineerId, d.type);

@@ -4,6 +4,7 @@ import { readDB, toPublic } from "@/server/db";
 
 export async function POST(req: Request) {
   const { email, password, role } = await req.json().catch(() => ({}));
+  if (String(password ?? "").length > 200) return fail("Incorrect email or password", 401);
   const db = await readDB();
   const user = db.users.find((u) => u.email === String(email ?? "").trim().toLowerCase());
   if (user && user.provider === "google" && !user.passwordHash) return fail("This account uses Google sign-in. Please continue with Google.", 400);
@@ -11,6 +12,6 @@ export async function POST(req: Request) {
   const mismatch = roleMismatch(user, role);
   if (mismatch) return fail(mismatch, 403);
   const res = NextResponse.json({ user: toPublic(user) });
-  await createSessionCookie(res, user.id);
+  await createSessionCookie(res, user);
   return res;
 }

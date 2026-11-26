@@ -263,13 +263,14 @@ export function ProgressRing({ value, size = 148, stroke = 14, label, sub }: { v
 }
 
 export function Avatar({ name, picture, size = 36 }: { name: string; picture?: string; size?: number }) {
-  const initials = name
-    .split(/\s+/)
-    .map((p) => p[0])
-    .filter(Boolean)
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
+  const initials =
+    name
+      .split(/\s+/)
+      .map((p) => p.match(/\p{L}|\p{N}/u)?.[0])
+      .filter(Boolean)
+      .slice(0, 2)
+      .join("")
+      .toUpperCase() || "?";
   if (picture)
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={picture} alt="" referrerPolicy="no-referrer" className="shrink-0 rounded-full object-cover ring-2 ring-white/80" style={{ width: size, height: size }} />;
@@ -327,4 +328,17 @@ export function Spinner({ className }: { className?: string }) {
 /** Grouped list rows, iOS Settings style. */
 export function List({ children, className }: { children: ReactNode; className?: string }) {
   return <ul className={clsx("divide-y divide-ios-separator", className)}>{children}</ul>;
+}
+
+/** Shown when a page's data can't be loaded (offline, server error), instead of an endless spinner. */
+export function LoadError({ message, onRetry }: { message?: string | null; onRetry: () => void }) {
+  return (
+    <Card className="mx-auto mt-6 max-w-md">
+      <Empty
+        title="Couldn't load this page"
+        text={message && message !== "Failed to fetch" ? message : "Check your internet connection and try again."}
+        action={<Button variant="secondary" onClick={onRetry}>Try again</Button>}
+      />
+    </Card>
+  );
 }

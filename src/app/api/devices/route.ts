@@ -34,10 +34,13 @@ export async function POST(req: Request) {
   if (g.user.role === "engineer" && allowed.length && !allowed.includes(type as Device["type"]))
     return fail(`You can only add ${allowed.map((t) => DEVICE_TYPES.find((x) => x.key === t)?.label).join(", ")} devices. Ask your administrator to give you access to other types.`, 403);
   // Admins can create a device for a specific engineer.
-  const engineerId = g.user.role === "admin" && body.engineerId ? String(body.engineerId) : g.user.id;
+  const engineerId = g.user.role === "admin" ? String(body.engineerId ?? "") : g.user.id;
+  if (!engineerId) return fail("Choose the engineer who will check this device");
 
   const result = await mutate((db) => {
-    if (!db.users.some((u) => u.id === engineerId)) return { error: "Engineer not found" };
+    const owner = db.users.find((u) => u.id === engineerId);
+    if (!owner) return { error: "Engineer not found" };
+    if (owner.role !== "engineer") return { error: "Devices must be assigned to an engineer (administrators don't do daily checks)" };
     if (db.devices.some((d) => d.engineerId === engineerId && d.active && d.name.toLowerCase() === name.toLowerCase()))
       return { error: "A device with this name already exists" };
     const device: Device = { id: newId("DEV"), type: type as Device["type"], name, location, engineerId, active: true, createdAt: new Date().toISOString() };

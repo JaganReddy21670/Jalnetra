@@ -24,10 +24,18 @@ export async function PATCH(req: Request, { params }: Ctx) {
     if (role && role !== u.role) {
       if (u.role === "admin" && role === "engineer" && db.users.filter((x) => x.role === "admin").length === 1)
         return { error: "There must be at least one administrator", status: 400 };
+      const owned = db.devices.filter((d) => d.active && d.engineerId === u.id).length;
+      if (role === "admin" && owned)
+        return { error: `${u.name} still has ${owned} device${owned > 1 ? "s" : ""} to check. Reassign ${owned > 1 ? "them" : "it"} to another engineer on the Devices page first.`, status: 409 };
       u.role = role;
       db.audit.push({ at: now, actor: g.user.email, action: "Role changed", detail: `${u.email} → ${role}` });
     }
     if (types) {
+      const stranded = db.devices.filter((d) => d.active && d.engineerId === u.id && !types!.includes(d.type));
+      if (stranded.length) {
+        const label = DEVICE_TYPES.find((t) => t.key === stranded[0].type)?.label ?? stranded[0].type;
+        return { error: `${u.name} still has ${stranded.length} device${stranded.length > 1 ? "s" : ""} of a type you removed (e.g. ${label}: ${stranded[0].name}). Reassign or remove ${stranded.length > 1 ? "them" : "it"} first.`, status: 409 };
+      }
       u.deviceTypes = types;
       db.audit.push({ at: now, actor: g.user.email, action: "Device access changed", detail: `${u.email} → ${types.join(", ")}` });
     }

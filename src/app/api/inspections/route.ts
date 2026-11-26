@@ -13,7 +13,8 @@ export async function GET(req: Request) {
   const from = url.searchParams.get("from") ?? "0000-00-00";
   const to = url.searchParams.get("to") ?? "9999-99-99";
   const db = await readDB();
-  const inspections = db.inspections.filter((i) => i.date >= from && i.date <= to && (g.user.role === "admin" || i.engineerId === g.user.id));
+  const mine = new Set(db.devices.filter((d) => d.engineerId === g.user.id).map((d) => d.id));
+  const inspections = db.inspections.filter((i) => i.date >= from && i.date <= to && (g.user.role === "admin" || mine.has(i.deviceId) || i.engineerId === g.user.id));
   return json({ inspections, today: istParts(new Date()).date });
 }
 

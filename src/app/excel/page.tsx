@@ -4,7 +4,7 @@ import clsx from "clsx";
 import { Download, FileSpreadsheet, Lock } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useApi, useNow } from "@/components/session";
-import { Button, Card, DeviceIcon, Empty, PageHeader, Spinner } from "@/components/ui";
+import { Button, Card, DeviceIcon, Empty, PageHeader, Spinner, LoadError } from "@/components/ui";
 import { DEVICE_TYPES, type Device, type Inspection, type PublicUser } from "@/lib/devices";
 import { fmtDate, istParts } from "@/lib/format";
 import { APP_SLUG } from "@/lib/brand";
@@ -37,6 +37,8 @@ export default function ExcelPage() {
     return m;
   }, [devRes.data]);
 
+  const loadErr = usersRes.error || devRes.error || insRes.error;
+  if (loadErr) return <LoadError message={loadErr} onRetry={() => { usersRes.reload(); devRes.reload(); insRes.reload(); }} />;
   if (!ready) return <div className="flex justify-center py-24"><Spinner /></div>;
   const list = devRes.data!.devices.filter((d) => d.type === sheet).sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name));
   const nameOf = (id: string) => usersRes.data!.users.find((u) => u.id === id)?.name ?? "—";

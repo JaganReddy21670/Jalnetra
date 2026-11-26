@@ -111,6 +111,7 @@ export async function runDailyAlertsReport(slot: AlertSlot, now = new Date(), op
   // Who still has unchecked active devices today?
   const checked = new Set(db0.inspections.filter((i) => i.date === date).map((i) => i.deviceId));
   const pendingByEngineer = db0.users
+    .filter((u) => u.role === "engineer")
     .map((u) => {
       const mine = db0.devices.filter((d) => d.active && d.engineerId === u.id && dueOn(d, date));
       const pending = mine.filter((d) => !checked.has(d.id)).map((d) => ({ name: d.name, type: deviceType(d.type).label, location: d.location }));

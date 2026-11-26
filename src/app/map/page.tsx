@@ -6,7 +6,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useApi, useNow, useSession } from "@/components/session";
-import { Card, DayBadge, DeviceIcon, PageHeader, Segmented, Spinner, dayMeta } from "@/components/ui";
+import { Card, DayBadge, DeviceIcon, PageHeader, Segmented, Spinner, dayMeta, LoadError } from "@/components/ui";
 import { deviceType, type Device, type Inspection, type PublicUser } from "@/lib/devices";
 import { fmtTime, istParts } from "@/lib/format";
 import { dayState, indexInspections, shiftDate, uptime, type DayState } from "@/lib/status";
@@ -81,6 +81,8 @@ export default function MapPage() {
     [JSON.stringify(located.map((r) => [r.d.id, r.st, r.d.lat, r.d.lng, r.up.pct]))],
   );
 
+  const loadErr = devRes.error || insRes.error || usersRes.error;
+  if (loadErr) return <LoadError message={loadErr} onRetry={() => { devRes.reload(); insRes.reload(); usersRes.reload(); }} />;
   if (!rows) return <div className="flex justify-center py-24"><Spinner /></div>;
   const count = (s: Filter) => (s === "all" ? rows.length : rows.filter((r) => r.st === s).length);
 

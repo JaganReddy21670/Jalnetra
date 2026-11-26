@@ -4,7 +4,7 @@ import clsx from "clsx";
 import { Check, Copy, ExternalLink, Eye, KeyRound, RefreshCw, Send } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api, useApi, useSession } from "@/components/session";
-import { Badge, Button, Card, CardHeader, Field, PageHeader, Segmented, Spinner, Toggle, inputCls, textareaCls } from "@/components/ui";
+import { Badge, Button, Card, CardHeader, Field, PageHeader, Segmented, Spinner, Toggle, inputCls, textareaCls, LoadError } from "@/components/ui";
 import { APP_NAME } from "@/lib/brand";
 import { AlertsCard, EmailAccountCard, WeeklySummaryCard, type AlertsS, type EmailS } from "@/components/EmailSettings";
 
@@ -41,6 +41,7 @@ export default function SettingsPage() {
     }
   }
 
+  if (res.error && !res.data) return <LoadError message={res.error} onRetry={res.reload} />;
   if (!res.data) return <div className="flex justify-center py-24"><Spinner /></div>;
   const on = !!res.data.googleClientId;
 

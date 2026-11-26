@@ -47,9 +47,12 @@ async function sign(payload: string) {
   return createHmac("sha256", await secret()).update(payload).digest("base64url");
 }
 
-export async function createSessionCookie(res: NextResponse, userId: string) {
+/** A short fingerprint of the password hash: changing or resetting the password ends existing sessions. */
+const pwVersion = (u: Pick<UserRecord, "passwordHash">) => (u.passwordHash ?? "").slice(0, 12);
+
+export async function createSessionCookie(res: NextResponse, user: UserRecord) {
   const exp = Date.now() + SESSION_DAYS * 86400_000;
-  const payload = Buffer.from(JSON.stringify({ uid: userId, exp })).toString("base64url");
+  const payload = Buffer.from(JSON.stringify({ uid: user.id, exp, pv: pwVersion(user) })).toString("base64url");
   const token = `${payload}.${await sign(payload)}`;
   res.cookies.set(SESSION_COOKIE, token, {
     httpOnly: true,
@@ -73,10 +76,14 @@ export async function currentUser(): Promise<UserRecord | null> {
   const expected = await sign(payload);
   if (expected.length !== sig.length || !timingSafeEqual(Buffer.from(expected), Buffer.from(sig))) return null;
   try {
-    const { uid, exp } = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    const { uid, exp, pv } = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
     if (Date.now() > exp) return null;
     const db = await readDB();
-    return db.users.find((u) => u.id === uid) ?? null;
+    const u = db.users.find((x) => x.id === uid);
+    if (!u) return null;
+    // Cookies issued before this check existed carry no pv; they expire on their own within 14 days.
+    if (pv !== undefined && pv !== pwVersion(u)) return null;
+    return u;
   } catch {
     return null;
   }
@@ -116,7 +123,7 @@ export function resolveNewRole(db: DB, wanted: unknown, code: unknown, email: st
   const given = String(code ?? "").trim().toUpperCase();
   const setup = setupCode();
   const hasAdmin = db.users.some((u) => u.role === "admin");
-  if (isAdminEmail(email) || (setup && given === setup)) {
+  if (isAdminEmail(email) || (setup && !hasAdmin && given === setup)) {
     ensureAdminCode(db);
     return { role: "admin" };
   }
@@ -128,6 +135,26 @@ export function resolveNewRole(db: DB, wanted: unknown, code: unknown, email: st
   }
   if (given === ensureAdminCode(db)) return { role: "admin" };
   return { error: "Admin access code is missing or incorrect. Ask an existing administrator for it." };
+}
+
+const LOCK_AFTER = 5;
+const LOCK_MS = 15 * 60_000;
+
+/** Error message if code entry for this purpose is locked after too many wrong codes, else null. */
+export function codeLocked(db: DB, purpose: string): string | null {
+  const l = db.settings.codeLock?.[purpose];
+  if (!l || l.until <= Date.now()) return null;
+  return `Too many wrong codes. Try again in ${Math.ceil((l.until - Date.now()) / 60_000)} minutes.`;
+}
+
+/** Records a wrong code (call inside mutate). Locks after LOCK_AFTER misses in a row. */
+export function recordCodeFailure(db: DB, purpose: string) {
+  db.settings.codeLock ??= {};
+  const l = db.settings.codeLock[purpose] ?? { fails: 0, until: 0 };
+  if (l.until && l.until <= Date.now()) Object.assign(l, { fails: 0, until: 0 });
+  l.fails += 1;
+  if (l.fails >= LOCK_AFTER) Object.assign(l, { fails: 0, until: Date.now() + LOCK_MS });
+  db.settings.codeLock[purpose] = l;
 }
 
 /** Optional one-time code (env ADMIN_SETUP_CODE) required to create admins on a public server. */

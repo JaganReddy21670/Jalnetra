@@ -6,8 +6,10 @@ import { DEVICE_TYPES, type Device } from "@/lib/devices";
 export async function POST(req: Request) {
   const g = await requireUser();
   if ("error" in g) return g.error;
+  if (g.user.onboarded) return fail("Setup is already complete. Add more devices from the Devices page.", 409);
   const { devices } = await req.json().catch(() => ({ devices: [] }));
   const list = Array.isArray(devices) ? devices : [];
+  if (list.length > 100) return fail("Add at most 100 devices at a time");
   const clean: { type: string; name: string; location: string; coords?: { lat: number; lng: number } | null }[] = [];
   for (const d of list) {
     const type = String(d?.type ?? "");
@@ -34,6 +36,7 @@ export async function POST(req: Request) {
       db.devices.push(dev);
     }
     const u = db.users.find((x) => x.id === g.user.id)!;
+    if (u.onboarded) return u;
     u.onboarded = true;
     if (u.role === "engineer") u.deviceTypes = Array.from(new Set(clean.map((c) => c.type))) as Device["type"][];
     db.audit.push({ at: now, actor: u.email, action: "Onboarding completed", detail: `${clean.length} device(s) added` });

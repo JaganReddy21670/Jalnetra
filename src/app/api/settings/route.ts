@@ -1,5 +1,5 @@
 import { ensureAdminCode, fail, json, requireUser } from "@/server/auth";
-import { mutate, readDB } from "@/server/db";
+import { defaultAlerts, mutate, readDB, type AlertSettings } from "@/server/db";
 import { defaultEmail, type EmailSettings } from "@/server/mailer";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +15,7 @@ export async function GET() {
     googleFromEnv: !!process.env.GOOGLE_CLIENT_ID,
     adminCode: db.settings.adminCode ?? null,
     email: publicEmail(db.settings.email),
+    alerts: { ...defaultAlerts(), ...(db.settings.alerts ?? {}) },
   });
 }
 
@@ -56,7 +57,18 @@ export async function PATCH(req: Request) {
       weekly: { enabled: !!e.weekly?.enabled, day: Math.min(6, Math.max(0, Number(e.weekly?.day ?? 1))), time: String(e.weekly.time) },
     };
   }
+  let alertsPatch: AlertSettings | null = null;
+  if (body.alerts) {
+    const a = body.alerts;
+    const extra = (Array.isArray(a.extra) ? a.extra : String(a.extra ?? "").split(/[,\s;]+/)).map((x: string) => String(x).trim()).filter(Boolean);
+    if (extra.some((r: string) => !EMAIL_RE.test(r))) return fail("One of the extra alert emails isn't valid");
+    alertsPatch = { reminder: !!a.reminder, deadline: !!a.deadline, extra };
+  }
   const settings = await mutate((db) => {
+    if (alertsPatch) {
+      db.settings.alerts = alertsPatch;
+      db.audit.push({ at: new Date().toISOString(), actor: g.user.email, action: "Alert settings updated", detail: `4 PM ${alertsPatch.reminder ? "on" : "off"}, 5 PM ${alertsPatch.deadline ? "on" : "off"}` });
+    }
     if (emailPatch) {
       const prev = db.settings.email;
       db.settings.email = { ...emailPatch, pass: emailPatch.pass || prev?.pass || "", lastWeeklySent: prev?.lastWeeklySent };
@@ -76,5 +88,5 @@ export async function PATCH(req: Request) {
     }
     return db.settings;
   });
-  return json({ googleClientId: settings.googleClientId ?? null, adminCode: settings.adminCode ?? null, googleFromEnv: !!process.env.GOOGLE_CLIENT_ID, email: publicEmail(settings.email) });
+  return json({ googleClientId: settings.googleClientId ?? null, adminCode: settings.adminCode ?? null, googleFromEnv: !!process.env.GOOGLE_CLIENT_ID, email: publicEmail(settings.email), alerts: { ...defaultAlerts(), ...(settings.alerts ?? {}) } });
 }

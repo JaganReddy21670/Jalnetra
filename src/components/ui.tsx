@@ -16,6 +16,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { deviceType } from "@/lib/devices";
 
 /* ---------- Surfaces ---------- */
@@ -290,8 +291,9 @@ export function Sheet({ open, onClose, title, children, footer }: { open: boolea
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
   }, [open, onClose]);
-  if (!open) return null;
-  return (
+  if (!open || typeof document === "undefined") return null;
+  // Rendered into <body> so blurred ("glass") ancestors can't trap the fixed overlay inside them.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/25 backdrop-blur-sm sm:items-center sm:p-6" onClick={onClose}>
       <div className="glass-strong max-h-[92vh] w-full animate-rise overflow-hidden rounded-t-[28px] bg-white/85 shadow-float sm:max-w-lg sm:rounded-[28px]" onClick={(e) => e.stopPropagation()}>
         <div className="mx-auto mt-2 h-1.5 w-10 rounded-full bg-black/15 sm:hidden" />
@@ -305,7 +307,7 @@ export function Sheet({ open, onClose, title, children, footer }: { open: boolea
         {footer && <div className="flex justify-end gap-2 px-6 pb-6 pt-2">{footer}</div>}
       </div>
     </div>
-  );
+  , document.body);
 }
 
 export function Empty({ title, text, action }: { title: string; text?: string; action?: ReactNode }) {

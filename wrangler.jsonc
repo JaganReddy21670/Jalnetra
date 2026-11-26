@@ -7,12 +7,12 @@
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
   "services": [{ "binding": "WORKER_SELF_REFERENCE", "service": "jalnetra-app" }],
-  "vars": { "STORAGE": "d1" },
+  "vars": { "STORAGE": "d1", "APP_URL": "https://jalnetra.pages.dev" },
   "d1_databases": [
     { "binding": "DB", "database_name": "jalnetra-db", "database_id": "d715d7dd-e7a9-4b4c-b392-daf38bad15fa" }
   ],
-  // Weekly summary check: daily at 09:00 IST (03:30 UTC).
-  "triggers": { "crons": ["30 3 * * *"] },
+  // All times UTC. 03:30 = 09:00 IST weekly-summary check · 10:30 = 4 PM IST reminder · 11:30 = 5 PM IST deadline alerts.
+  "triggers": { "crons": ["30 3 * * *", "30 10 * * *", "30 11 * * *"] },
   "observability": { "enabled": true }
   // Secrets (set with `npx wrangler secret put NAME`): SESSION_SECRET, ADMIN_SETUP_CODE, CRON_SECRET
 }

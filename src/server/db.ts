@@ -11,6 +11,25 @@ export interface UserRecord extends PublicUser {
   googleSub?: string;
 }
 
+export interface AlertSettings {
+  reminder: boolean; // 4:00 PM IST reminder to engineers with unchecked nodes
+  deadline: boolean; // 5:00 PM IST missed notice to engineers + escalation to admins
+  extra: string[]; // extra escalation recipients besides all Administrators
+}
+
+export const defaultAlerts = (): AlertSettings => ({ reminder: true, deadline: true, extra: [] });
+
+/** In-app notification shown under the bell. */
+export interface AppNotification {
+  id: string;
+  userId: string;
+  at: string;
+  kind: "reminder" | "missed" | "escalation" | "info";
+  title: string;
+  body: string;
+  read: boolean;
+}
+
 export interface AuditRecord {
   at: string;
   actor: string;
@@ -19,7 +38,17 @@ export interface AuditRecord {
 }
 
 export interface DB {
-  settings: { adminCode?: string; googleClientId?: string; email?: EmailSettings; sessionSecret?: string };
+  settings: {
+    adminCode?: string;
+    googleClientId?: string;
+    email?: EmailSettings;
+    sessionSecret?: string;
+    /** Daily deadline alerts. Defaults: both on, no extra recipients. */
+    alerts?: AlertSettings;
+    /** "<IST date>:<slot>" → ISO time sent. Prevents duplicate alerts; pruned to ~2 weeks. */
+    alertLog?: Record<string, string>;
+  };
+  notifications?: AppNotification[];
   users: UserRecord[];
   devices: Device[];
   inspections: Inspection[];
@@ -31,7 +60,7 @@ export const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), "data")
 const DB_FILE = path.join(DATA_DIR, "db.json");
 export const EXCEL_FILE = path.join(DATA_DIR, `${APP_SLUG}-Devices.xlsx`);
 
-const empty = (): DB => ({ settings: {}, users: [], devices: [], inspections: [], audit: [] });
+const empty = (): DB => ({ settings: {}, users: [], devices: [], inspections: [], audit: [], notifications: [] });
 
 /** Cloudflare D1 when STORAGE=d1 (set in wrangler.jsonc); otherwise a local JSON file. */
 export const usingD1 = () => process.env.STORAGE === "d1";
@@ -42,6 +71,7 @@ export const usingDatabase = usingD1;
 function normalize(raw: unknown): DB {
   const db: DB = { ...empty(), ...((raw as Partial<DB>) ?? {}) };
   db.settings ??= {};
+  db.notifications ??= [];
   // Older accounts (created before per-type access existed): derive access from the devices they added.
   for (const u of db.users) {
     if (u.role === "engineer" && u.onboarded && !u.deviceTypes?.length) {

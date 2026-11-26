@@ -8,6 +8,7 @@ import { useState, type ReactNode } from "react";
 import type { Role } from "@/lib/devices";
 import { APP_NAME } from "@/lib/brand";
 import { Logo } from "./Logo";
+import { NotificationBell } from "./NotificationBell";
 import { istParts } from "@/lib/format";
 import { useNow, useSession } from "./session";
 import { Avatar, Sheet, Spinner } from "./ui";
@@ -175,6 +176,7 @@ function TopBar() {
             <div className="truncate text-[16px] font-semibold tracking-[-0.01em] text-ios-label">{user.name}</div>
           </div>
         )}
+        {user && <span className="ml-auto lg:ml-auto"><NotificationBell /></span>}
         <div className="flex shrink-0 items-center gap-1 lg:hidden">
           {user && <Avatar name={user.name} picture={user.picture} size={32} />}
           <button onClick={logout} className="flex h-8 w-8 items-center justify-center rounded-full text-ios-gray hover:bg-black/5" aria-label="Sign out">

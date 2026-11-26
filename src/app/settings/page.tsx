@@ -6,19 +6,9 @@ import { useEffect, useState } from "react";
 import { api, useApi, useSession } from "@/components/session";
 import { Badge, Button, Card, CardHeader, Field, PageHeader, Segmented, Spinner, Toggle, inputCls, textareaCls } from "@/components/ui";
 import { APP_NAME } from "@/lib/brand";
+import { AlertsCard, EmailAccountCard, WeeklySummaryCard, type AlertsS, type EmailS } from "@/components/EmailSettings";
 
-type EmailS = {
-  host: string;
-  port: number;
-  secure: boolean;
-  user: string;
-  passSet: boolean;
-  from: string;
-  recipients: string[];
-  weekly: { enabled: boolean; day: number; time: string };
-  lastWeeklySent?: string;
-};
-type S = { googleClientId: string | null; googleFromEnv: boolean; adminCode: string | null; email: EmailS };
+type S = { googleClientId: string | null; googleFromEnv: boolean; adminCode: string | null; email: EmailS; alerts: AlertsS };
 
 export default function SettingsPage() {
   const { toast } = useSession();
@@ -56,7 +46,12 @@ export default function SettingsPage() {
 
   return (
     <>
-      <PageHeader title="Settings" subtitle={`Sign-in and access for ${APP_NAME}`} />
+      <PageHeader title="Settings" subtitle={`Email, notifications and access for ${APP_NAME}`} />
+
+      <div className="mb-5 grid gap-5 xl:grid-cols-2">
+        <EmailAccountCard key={`acct-${JSON.stringify(res.data.email)}`} email={res.data.email} onSaved={res.reload} />
+        <AlertsCard key={JSON.stringify(res.data.alerts)} alerts={res.data.alerts} emailReady={res.data.email.passSet && !!res.data.email.user} onSaved={res.reload} />
+      </div>
 
       <div className="grid gap-5 xl:grid-cols-[1.4fr_1fr]">
         {/* Google sign-in */}
@@ -146,167 +141,10 @@ export default function SettingsPage() {
         </Card>
       </div>
 
-      <WeeklyEmailCard email={res.data.email} onSaved={res.reload} />
+      <div className="mt-5 grid gap-5 xl:grid-cols-2">
+        <WeeklySummaryCard key={JSON.stringify(res.data.email)} email={res.data.email} onSaved={res.reload} />
+      </div>
     </>
-  );
-}
-
-const PROVIDERS = {
-  Gmail: { host: "smtp.gmail.com", port: 465, secure: true },
-  Outlook: { host: "smtp.office365.com", port: 587, secure: false },
-  Other: null,
-} as const;
-const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-function WeeklyEmailCard({ email, onSaved }: { email: EmailS; onSaved: () => void }) {
-  const { toast } = useSession();
-  const [e, setE] = useState(email);
-  const [pass, setPass] = useState("");
-  const [recipients, setRecipients] = useState(email.recipients.join(", "));
-  const [busy, setBusy] = useState<"save" | "send" | null>(null);
-  const provider = (Object.keys(PROVIDERS) as (keyof typeof PROVIDERS)[]).find((k) => PROVIDERS[k]?.host === e.host) ?? "Other";
-  const dirty =
-    JSON.stringify({ ...e, recipients: undefined }) !== JSON.stringify({ ...email, recipients: undefined }) || pass !== "" || recipients !== email.recipients.join(", ");
-
-  async function save(silent = false) {
-    setBusy("save");
-    try {
-      await api("PATCH", "/api/settings", { email: { ...e, pass, recipients } });
-      setPass("");
-      if (!silent) toast("Email settings saved");
-      onSaved();
-      return true;
-    } catch (err) {
-      toast((err as Error).message, "error");
-      return false;
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function sendNow() {
-    if (dirty && !(await save(true))) return;
-    setBusy("send");
-    try {
-      const r = await api<{ accepted: string[] }>("POST", "/api/settings/email");
-      toast(`Weekly summary sent to ${r.accepted.length} recipient(s)`);
-    } catch (err) {
-      toast((err as Error).message, "error");
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  return (
-    <Card className="mt-5">
-      <CardHeader
-        title="Weekly summary email"
-        subtitle="Last 7 days of checks, uptime and offline reasons, with the Excel workbook attached"
-        action={<Badge tone={e.weekly.enabled ? "green" : "gray"} dot>{e.weekly.enabled ? "Scheduled" : "Off"}</Badge>}
-      />
-      <div className="grid gap-6 px-5 pb-6 sm:px-6 lg:grid-cols-2">
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-4 rounded-2xl bg-white/70 p-4 ring-1 ring-black/[0.05]">
-            <div>
-              <p className="text-[15px] font-semibold">Send automatically every week</p>
-              <p className="text-[13px] text-ios-gray">
-                {DAYS[e.weekly.day]} at {e.weekly.time} IST{e.lastWeeklySent ? ` · last sent ${e.lastWeeklySent}` : ""}
-              </p>
-            </div>
-            <Toggle checked={e.weekly.enabled} onChange={(v) => setE({ ...e, weekly: { ...e.weekly, enabled: v } })} label="Weekly email" />
-          </div>
-          <div>
-            <span className="mb-1.5 block text-[13px] font-medium text-[#3C3C43]">Day</span>
-            <div className="flex gap-1.5">
-              {DAYS.map((d, i) => (
-                <button
-                  key={d}
-                  type="button"
-                  onClick={() => setE({ ...e, weekly: { ...e.weekly, day: i } })}
-                  className={clsx(
-                    "h-10 flex-1 rounded-xl text-[13px] font-semibold transition",
-                    e.weekly.day === i ? "bg-ios-blue text-white" : "bg-white/70 ring-1 ring-black/[0.06] hover:bg-white",
-                  )}
-                >
-                  {d}
-                </button>
-              ))}
-            </div>
-          </div>
-          <Field label="Time (IST)">
-            <input type="time" className={inputCls} value={e.weekly.time} onChange={(ev) => setE({ ...e, weekly: { ...e.weekly, time: ev.target.value } })} />
-          </Field>
-          <Field label="Send to" hint="Separate several emails with commas">
-            <textarea rows={2} className={textareaCls} value={recipients} onChange={(ev) => setRecipients(ev.target.value)} placeholder="manager@org.in, team@org.in" />
-          </Field>
-        </div>
-
-        <div className="space-y-4">
-          <div>
-            <span className="mb-1.5 block text-[13px] font-medium text-[#3C3C43]">Send from</span>
-            <Segmented
-              value={provider}
-              options={["Gmail", "Outlook", "Other"] as const}
-              neutral
-              onChange={(k) => {
-                const pr = PROVIDERS[k];
-                setE(pr ? { ...e, ...pr } : { ...e, host: "", port: 587, secure: false });
-              }}
-            />
-          </div>
-          {provider === "Other" && (
-            <div className="grid grid-cols-[1fr_100px] gap-2">
-              <Field label="SMTP server">
-                <input className={inputCls} value={e.host} onChange={(ev) => setE({ ...e, host: ev.target.value })} placeholder="smtp.example.com" />
-              </Field>
-              <Field label="Port">
-                <input
-                  className={inputCls}
-                  type="number"
-                  value={e.port}
-                  onChange={(ev) => setE({ ...e, port: Number(ev.target.value), secure: Number(ev.target.value) === 465 })}
-                />
-              </Field>
-            </div>
-          )}
-          <Field label="Email address">
-            <input className={inputCls} type="email" value={e.user} onChange={(ev) => setE({ ...e, user: ev.target.value })} placeholder="you@gmail.com" autoComplete="off" />
-          </Field>
-          <Field
-            label={provider === "Gmail" ? "Gmail App Password" : "Password"}
-            hint={e.passSet ? "Saved. Leave empty to keep it." : provider === "Gmail" ? "Not your normal password: create a 16-letter App Password" : undefined}
-          >
-            <input
-              className={clsx(inputCls, "font-mono")}
-              type="password"
-              value={pass}
-              onChange={(ev) => setPass(ev.target.value)}
-              placeholder={e.passSet ? "••••••••••••" : "xxxx xxxx xxxx xxxx"}
-              autoComplete="new-password"
-            />
-          </Field>
-          {provider === "Gmail" && (
-            <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noreferrer" className="-mt-2 inline-flex items-center gap-1 text-[13px] font-semibold text-ios-blue hover:underline">
-              Create a Gmail App Password <ExternalLink className="h-3.5 w-3.5" />
-            </a>
-          )}
-        </div>
-      </div>
-      <div className="flex flex-wrap items-center gap-2 border-t border-ios-separator px-5 py-4 sm:px-6">
-        <Button loading={busy === "save"} disabled={!!busy || !dirty} onClick={() => save()}>
-          Save
-        </Button>
-        <Button variant="secondary" loading={busy === "send"} disabled={!!busy} onClick={sendNow}>
-          <Send className="h-4 w-4" /> Send Now
-        </Button>
-        <a href="/api/settings/email" target="_blank" rel="noreferrer">
-          <Button variant="plain">
-            <Eye className="h-4 w-4" /> Preview Email
-          </Button>
-        </a>
-        <span className="ml-auto text-[12px] text-ios-gray">The password is stored on this server only (data/db.json).</span>
-      </div>
-    </Card>
   );
 }
 

@@ -94,6 +94,12 @@ Vercel has no permanent disk, so on Vercel JalNetra stores everything in **Postg
 
 Notes: functions run in Singapore next to the database (`vercel.json`). On the Hobby plan, Vercel Cron runs once a day (09:00 IST), so the weekly email goes out around 9 AM on the chosen day. The Excel workbook is generated fresh on every download.
 
+### Cloudflare relay (for networks that block vercel.app)
+Some ISPs and campus networks block `*.vercel.app`. The free Worker in `cloudflare-proxy/` forwards everything (cookies and redirects included) to the Vercel app:
+
+- **Live link: https://jalnetra.jaganmohanreddy3310.workers.dev**
+- Redeploy: `cd cloudflare-proxy && npx wrangler deploy`. Change `ORIGIN` in `wrangler.toml` if the Vercel URL changes.
+
 ### Render (deploys from GitHub)
 1. Push this repo to GitHub (it can be private).
 2. On https://render.com choose **New → Blueprint** and pick the repo. `render.yaml` sets up everything: a Node web service, a 1 GB persistent disk at `/var/data` and a generated `SESSION_SECRET`.

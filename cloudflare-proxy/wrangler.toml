@@ -1,0 +1,9 @@
+# Free Cloudflare relay in front of the Vercel app.
+# Some networks (and ISPs) block *.vercel.app; *.workers.dev stays reachable.
+name = "jalnetra"
+main = "worker.js"
+compatibility_date = "2026-11-01"
+workers_dev = true
+
+[vars]
+ORIGIN = "https://jalnetra-dun.vercel.app"

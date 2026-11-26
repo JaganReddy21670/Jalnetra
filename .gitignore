@@ -16,3 +16,4 @@ data-backup*/
 
 .vercel
 .env*
+.wrangler/

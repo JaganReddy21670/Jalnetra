@@ -19,7 +19,7 @@ export interface AuditRecord {
 }
 
 export interface DB {
-  settings: { adminCode?: string; googleClientId?: string; email?: EmailSettings };
+  settings: { adminCode?: string; googleClientId?: string; email?: EmailSettings; sessionSecret?: string };
   users: UserRecord[];
   devices: Device[];
   inspections: Inspection[];
@@ -33,29 +33,78 @@ export const EXCEL_FILE = path.join(DATA_DIR, `${APP_SLUG}-Devices.xlsx`);
 
 const empty = (): DB => ({ settings: {}, users: [], devices: [], inspections: [], audit: [] });
 
-export async function readDB(): Promise<DB> {
-  try {
-    const raw = await fs.readFile(DB_FILE, "utf8");
-    const db: DB = { ...empty(), ...JSON.parse(raw) };
-    // Older accounts (created before per-type access existed): derive access from the devices they added.
-    for (const u of db.users) {
-      if (u.role === "engineer" && u.onboarded && !u.deviceTypes?.length) {
-        const types = Array.from(new Set(db.devices.filter((d) => d.engineerId === u.id).map((d) => d.type)));
-        if (types.length) u.deviceTypes = types;
-      }
+/** Postgres when DATABASE_URL is set (Vercel/Neon); otherwise a local JSON file. */
+export const usingPostgres = () => !!(process.env.DATABASE_URL || process.env.POSTGRES_URL);
+
+/** Fill defaults and upgrade records written by older versions. */
+function normalize(raw: unknown): DB {
+  const db: DB = { ...empty(), ...((raw as Partial<DB>) ?? {}) };
+  db.settings ??= {};
+  // Older accounts (created before per-type access existed): derive access from the devices they added.
+  for (const u of db.users) {
+    if (u.role === "engineer" && u.onboarded && !u.deviceTypes?.length) {
+      const types = Array.from(new Set(db.devices.filter((d) => d.engineerId === u.id).map((d) => d.type)));
+      if (types.length) u.deviceTypes = types;
     }
-    for (const d of db.devices) if (d.lat === undefined) Object.assign(d, parseGps(d.location) ?? {});
-    return db;
+  }
+  for (const d of db.devices) if (d.lat === undefined) Object.assign(d, parseGps(d.location) ?? {});
+  return db;
+}
+
+// ---------- Postgres ----------
+type PgPool = import("pg").Pool;
+const g = globalThis as unknown as { __jnPool?: PgPool; __jnTable?: Promise<void> };
+
+async function pool(): Promise<PgPool> {
+  if (!g.__jnPool) {
+    const { Pool } = await import("pg");
+    const url = process.env.DATABASE_URL || process.env.POSTGRES_URL!;
+    const local = /localhost|127\.0\.0\.1/.test(url);
+    g.__jnPool = new Pool({ connectionString: url, max: Number(process.env.PG_POOL_MAX || 3), ssl: local ? undefined : { rejectUnauthorized: false } });
+  }
+  if (!g.__jnTable) {
+    const { ensureTable } = await import("./pgstore");
+    g.__jnTable = ensureTable(g.__jnPool).catch((e) => {
+      g.__jnTable = undefined;
+      throw e;
+    });
+  }
+  await g.__jnTable;
+  return g.__jnPool;
+}
+
+export async function readDB(): Promise<DB> {
+  if (usingPostgres()) {
+    const { readDoc } = await import("./pgstore");
+    return normalize(await readDoc(await pool()));
+  }
+  try {
+    return normalize(JSON.parse(await fs.readFile(DB_FILE, "utf8")));
   } catch (e: unknown) {
     if ((e as NodeJS.ErrnoException).code === "ENOENT") return empty();
     throw e;
   }
 }
 
-// Serialise all writes through one promise chain so concurrent requests can't clobber each other.
+// Serialise local-file writes through one promise chain so concurrent requests can't clobber each other.
 let queue: Promise<unknown> = Promise.resolve();
 
 export function mutate<T>(fn: (db: DB) => T | Promise<T>): Promise<T> {
+  if (usingPostgres()) {
+    return (async () => {
+      const { mutateDoc } = await import("./pgstore");
+      const client = await (await pool()).connect();
+      try {
+        return await mutateDoc(client, empty(), async (doc) => {
+          const db = normalize(doc);
+          const result = await fn(db);
+          return { doc: db, result };
+        });
+      } finally {
+        client.release();
+      }
+    })();
+  }
   const run = queue.then(async () => {
     const db = await readDB();
     const result = await fn(db);
@@ -63,7 +112,7 @@ export function mutate<T>(fn: (db: DB) => T | Promise<T>): Promise<T> {
     const tmp = `${DB_FILE}.tmp`;
     await fs.writeFile(tmp, JSON.stringify(db, null, 2), "utf8");
     await fs.rename(tmp, DB_FILE);
-    // Keep the Excel workbook on disk in sync (best effort — fails if it's open in Excel).
+    // Keep the Excel workbook on disk in sync (best effort; fails if it's open in Excel).
     import("./excel").then((m) => m.writeExcelFile(db)).catch((err) => console.warn("[excel] could not update workbook:", err?.message ?? err));
     return result;
   });
@@ -85,7 +134,6 @@ export function grantType(db: DB, userId: string, type: Device["type"]) {
   if (!u.deviceTypes.includes(type)) u.deviceTypes.push(type);
 }
 
-/** Set (or clear) a device's lat/lng from its location text. */
 /** Validates optional lat/lng input. undefined = not supplied, null = clear. */
 export function readCoords(body: { lat?: unknown; lng?: unknown }): { lat: number; lng: number } | null | undefined | { error: string } {
   const has = (v: unknown) => v !== undefined;

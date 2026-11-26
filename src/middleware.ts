@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC = ["/login", "/api/auth", "/api/config", "/api/me"];
+const PUBLIC = ["/login", "/api/auth", "/api/config", "/api/me", "/api/cron"]; // /api/cron checks CRON_SECRET itself
 
 /** Cheap redirect for signed-out visitors. Real verification happens in every API route. */
 export function middleware(req: NextRequest) {

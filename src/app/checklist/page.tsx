@@ -9,7 +9,7 @@ import { api, useApi, useNow, useSession } from "@/components/session";
 import { Button, Card, DayBadge, DeviceIcon, Empty, Field, PageHeader, ProgressRing, Sheet, Spinner, Toggle, inputCls, textareaCls } from "@/components/ui";
 import { DEADLINE_MIN, DEVICE_TYPES, OFFLINE_REASONS, deviceType, type Device, type Inspection } from "@/lib/devices";
 import { fmtDate, fmtTime, istParts } from "@/lib/format";
-import { dayState } from "@/lib/status";
+import { dayState, dueOn } from "@/lib/status";
 
 type Draft = { dataStatus: "" | "Online" | "Offline"; lastDataReceived: string; offlineReason: string; remarks: string; confirmed: boolean };
 
@@ -34,6 +34,8 @@ export default function ChecklistPage() {
   const offlineCount = devices.filter((d) => insByDev.get(d.id)?.answers.dataStatus === "Offline").length;
   const pct = devices.length ? Math.round((done / devices.length) * 100) : 0;
   const late = now ? istParts(now).minutes >= DEADLINE_MIN : false;
+  // Devices added after today's deadline are not due until tomorrow, so they are never "late" today.
+  const dueUnchecked = today ? devices.filter((d) => !insByDev.has(d.id) && dueOn(d, today)).length : 0;
   const grouped = DEVICE_TYPES.map((t) => ({
     t,
     list: devices.filter((d) => d.type === t.key).sort((a, b) => Number(insByDev.has(a.id)) - Number(insByDev.has(b.id)) || a.name.localeCompare(b.name)),
@@ -114,8 +116,8 @@ export default function ChecklistPage() {
               <Mini label="Offline" value={offlineCount} color="text-[#D70015]" />
               <Mini label="To check" value={devices.length - done} color="text-[#A05A00]" />
             </div>
-            <p className={clsx("mt-4 text-center text-[14px]", pct === 100 ? "text-[#248A3D]" : late ? "text-[#D70015]" : "text-ios-gray")}>
-              {pct === 100 ? "All nodes checked for today." : late ? "Deadline passed. Remaining checks will be marked late." : "Tap a node to record whether data is coming."}
+            <p className={clsx("mt-4 text-center text-[14px]", pct === 100 ? "text-[#248A3D]" : late && dueUnchecked > 0 ? "text-[#D70015]" : "text-ios-gray")}>
+              {pct === 100 ? "All nodes checked for today." : late && dueUnchecked > 0 ? "Deadline passed. Remaining checks will be marked late." : late ? "New devices are due from tomorrow. You can still check them now." : "Tap a node to record whether data is coming."}
             </p>
           </Card>
 
@@ -187,7 +189,7 @@ export default function ChecklistPage() {
               <Auto label="Time" value={fmtTime(now.toISOString())} />
               <Auto label="Engineer" value={user?.name ?? ""} />
             </div>
-            {late && (
+            {late && open && today && dueOn(open, today) && (
               <p className="flex items-start gap-2 rounded-2xl bg-ios-orange/12 p-3 text-[13px] text-[#C93400]">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> It&apos;s past 5:00 PM IST. This check will be marked late.
               </p>

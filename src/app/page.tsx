@@ -8,7 +8,7 @@ import { useApi, useNow } from "@/components/session";
 import { Avatar, Badge, Button, Card, CardHeader, DayBadge, DeviceIcon, Empty, PageHeader, ProgressBar, ProgressRing, Spinner } from "@/components/ui";
 import { DEVICE_TYPES, type Device, type Inspection, type PublicUser } from "@/lib/devices";
 import { fmtDate, fmtTime, istParts } from "@/lib/format";
-import { dayState, indexInspections, shiftDate, uptime, uptimeColor } from "@/lib/status";
+import { dayState, dueOn, indexInspections, shiftDate, uptime, uptimeColor } from "@/lib/status";
 
 export default function OverviewPage() {
   const now = useNow(30000);
@@ -31,7 +31,7 @@ export default function OverviewPage() {
     const engineerIds = new Set(devices.map((d) => d.engineerId));
     const trend = Array.from({ length: 14 }, (_, k) => {
       const date = shiftDate(today, -(13 - k));
-      const exist = devices.filter((d) => istParts(new Date(d.createdAt)).date <= date);
+      const exist = devices.filter((d) => dueOn(d, date));
       const done = exist.filter((d) => idx.has(`${d.id}|${date}`)).length;
       return { label: new Date(`${date}T00:00:00Z`).toLocaleDateString("en-IN", { day: "2-digit", month: "short", timeZone: "UTC" }), pct: exist.length ? Math.round((done / exist.length) * 100) : null };
     });

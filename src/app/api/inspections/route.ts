@@ -2,6 +2,7 @@ import { fail, json, requireUser } from "@/server/auth";
 import { mutate, newId, readDB } from "@/server/db";
 import { DEADLINE_MIN, OFFLINE_REASONS, type Inspection } from "@/lib/devices";
 import { istParts } from "@/lib/format";
+import { dueOn } from "@/lib/status";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +56,7 @@ export async function POST(req: Request) {
       },
       remarks,
       issueDescription: "",
-      late: p.minutes >= DEADLINE_MIN,
+      late: p.minutes >= DEADLINE_MIN && dueOn(d, p.date), // added after the deadline today → not late
     };
     db.inspections.push(ins);
     db.audit.push({ at: ins.submittedAt, actor: g.user.email, action: "Node checked", detail: `${d.id} · ${dataStatus}${offlineReason ? ` (${offlineReason})` : ""}${ins.late ? " · late" : ""}` });

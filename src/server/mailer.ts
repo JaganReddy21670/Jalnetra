@@ -2,7 +2,7 @@ import nodemailer from "nodemailer";
 import { APP_NAME, APP_SLUG } from "@/lib/brand";
 import { DEVICE_TYPES } from "@/lib/devices";
 import { fmtDate, istParts } from "@/lib/format";
-import { indexInspections, shiftDate, uptime } from "@/lib/status";
+import { dueOn, indexInspections, shiftDate, uptime } from "@/lib/status";
 import type { DB } from "./db";
 import { workbookBuffer } from "./excel";
 
@@ -45,7 +45,6 @@ export function buildWeekly(db: DB, now = new Date()) {
   const dates = Array.from({ length: 7 }, (_, k) => shiftDate(from, k));
   const idx = indexInspections(db.inspections);
   const active = db.devices.filter((d) => d.active);
-  const created = (id: string) => istParts(new Date(active.find((d) => d.id === id)!.createdAt)).date;
 
   let expected = 0;
   let done = 0;
@@ -55,7 +54,7 @@ export function buildWeekly(db: DB, now = new Date()) {
   const reasons = new Map<string, number>();
   for (const d of active)
     for (const date of dates) {
-      if (date < created(d.id)) continue;
+      if (!dueOn(d, date) && !idx.get(`${d.id}|${date}`)) continue;
       expected++;
       const i = idx.get(`${d.id}|${date}`);
       if (!i) continue;
@@ -77,7 +76,7 @@ export function buildWeekly(db: DB, now = new Date()) {
       let off = 0;
       for (const d of mine)
         for (const date of dates) {
-          if (date < created(d.id)) continue;
+          if (!dueOn(d, date) && !idx.get(`${d.id}|${date}`)) continue;
           exp++;
           const i = idx.get(`${d.id}|${date}`);
           if (i) {

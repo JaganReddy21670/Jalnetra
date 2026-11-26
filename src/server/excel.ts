@@ -3,7 +3,7 @@ import { promises as fs } from "fs";
 import { DEVICE_TYPES, type Device, type Inspection } from "@/lib/devices";
 import { DATA_DIR, EXCEL_FILE, type DB } from "./db";
 import { istParts } from "@/lib/format";
-import { indexInspections, uptime } from "@/lib/status";
+import { dueOn, indexInspections, uptime } from "@/lib/status";
 import { APP_NAME } from "@/lib/brand";
 
 const DAYS = 31;
@@ -155,7 +155,8 @@ export async function buildWorkbook(db: DB): Promise<ExcelJS.Workbook> {
         const ins = insByDevDay.get(`${d.id}|${date}`);
         let st: keyof typeof STATUS | null = null;
         if (ins) st = ins.answers.condition === "Issue Detected" ? "issue" : ins.late ? "late" : "healthy";
-        else if (d.active && date >= created) st = date === today ? (nowMin < 17 * 60 ? "pending" : "missed") : "missed";
+        else if (d.active && dueOn(d, date)) st = date === today ? (nowMin < 17 * 60 ? "pending" : "missed") : "missed";
+        else if (d.active && date === today) st = "pending";
         if (!st) return;
         cell.value = STATUS[st].text;
         cell.fill = STATUS[st].fill;

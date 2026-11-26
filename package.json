@@ -14,11 +14,11 @@
     "leaflet": "^1.9.4",
     "lucide-react": "0.469.0",
     "maplibre-gl": "^4.7.1",
-    "next": "15.1.6",
+    "next": "15.1.12",
     "nodemailer": "^6.9.16",
     "pg": "^8.13.1",
-    "react": "19.0.0",
-    "react-dom": "19.0.0",
+    "react": "19.0.9",
+    "react-dom": "19.0.9",
     "recharts": "2.15.0"
   },
   "devDependencies": {

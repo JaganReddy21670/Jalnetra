@@ -46,12 +46,18 @@ export async function PATCH(req: Request) {
     const port = Number(e.port);
     if (!e.host || !port) return fail("SMTP server and port are required");
     if (!/^\d{2}:\d{2}$/.test(String(e.weekly?.time ?? ""))) return fail("Pick a time for the weekly email");
+    const host = String(e.host).trim();
+    // Google App Passwords are 16 letters, shown as "abcd efgh ijkl mnop": drop the spaces.
+    let pass = String(e.pass ?? "").replace(/\s+/g, "");
+    if (pass && /(^|\.)gmail\.com$|googlemail\.com$/i.test(host) && !/^[a-z]{16}$/i.test(pass))
+      return fail("That isn't a Gmail App Password. Create one at myaccount.google.com/apppasswords: it's 16 letters like 'abcd efgh ijkl mnop'. Your normal Gmail password won't work.");
+    if (!pass) pass = "";
     emailPatch = {
-      host: String(e.host).trim(),
+      host,
       port,
       secure: !!e.secure,
       user: String(e.user ?? "").trim(),
-      pass: String(e.pass ?? ""),
+      pass,
       from: String(e.from ?? "").trim(),
       recipients,
       weekly: { enabled: !!e.weekly?.enabled, day: Math.min(6, Math.max(0, Number(e.weekly?.day ?? 1))), time: String(e.weekly.time) },

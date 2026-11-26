@@ -109,7 +109,10 @@ export function EmailAccountCard({ email, onSaved }: { email: EmailS; onSaved: (
           <Field label="Email address">
             <input className={inputCls} type="email" value={e.user} onChange={(ev) => setE({ ...e, user: ev.target.value })} placeholder="jalnetra.alerts@gmail.com" autoComplete="off" />
           </Field>
-          <Field label={provider === "Gmail" ? "Gmail App Password" : "Password"} hint={email.passSet ? "Saved. Leave empty to keep it." : undefined}>
+          <Field
+            label={provider === "Gmail" ? "Gmail App Password" : "Password"}
+            hint={email.passSet ? "Saved. Leave empty to keep it." : provider === "Gmail" ? "16 letters from myaccount.google.com/apppasswords, not your Gmail password" : undefined}
+          >
             <input
               className={clsx(inputCls, "font-mono")}
               type="password"
@@ -144,6 +147,21 @@ export function AlertsCard({ alerts, emailReady, onSaved }: { alerts: AlertsS; e
   const [extra, setExtra] = useState(alerts.extra.join(", "));
   const [busy, setBusy] = useState(false);
   const dirty = a.reminder !== alerts.reminder || a.deadline !== alerts.deadline || extra !== alerts.extra.join(", ");
+  const [testing, setTesting] = useState<"reminder" | "deadline" | null>(null);
+  const [result, setResult] = useState<(TestReport & { slot: "reminder" | "deadline" }) | null>(null);
+
+  async function runTest(slot: "reminder" | "deadline") {
+    setTesting(slot);
+    setResult(null);
+    try {
+      const r = await api<TestReport>("POST", "/api/alerts/test", { slot });
+      setResult({ ...r, slot });
+    } catch (err) {
+      toast((err as Error).message, "error");
+    } finally {
+      setTesting(null);
+    }
+  }
 
   async function save() {
     setBusy(true);
@@ -188,6 +206,21 @@ export function AlertsCard({ alerts, emailReady, onSaved }: { alerts: AlertsS; e
         <Field label="Also send the 5 PM escalation to" hint="Optional, comma-separated, e.g. a manager. Administrators always receive it.">
           <textarea rows={2} className={textareaCls} value={extra} onChange={(ev) => setExtra(ev.target.value)} placeholder="manager@org.in" />
         </Field>
+        <div className="rounded-2xl bg-white/70 p-4 ring-1 ring-black/[0.05]">
+          <p className="text-[15px] font-semibold">Test now</p>
+          <p className="text-[13px] leading-snug text-ios-gray">
+            Sends the real alert immediately, marked [TEST], to every engineer who has unchecked nodes today. Today&apos;s scheduled alerts still run.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button size="sm" variant="secondary" loading={testing === "reminder"} disabled={!!testing} onClick={() => runTest("reminder")}>
+              <Bell className="h-3.5 w-3.5" /> Test 4 PM reminder
+            </Button>
+            <Button size="sm" variant="secondary" loading={testing === "deadline"} disabled={!!testing} onClick={() => runTest("deadline")}>
+              <Mail className="h-3.5 w-3.5" /> Test 5 PM alert
+            </Button>
+          </div>
+          {result && <TestResult r={result} />}
+        </div>
         <p className={clsx("flex items-start gap-2 rounded-xl px-3 py-2 text-[13px]", emailReady ? "bg-ios-green/10 text-[#248A3D]" : "bg-ios-orange/12 text-[#C93400]")}>
           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
           {emailReady
@@ -289,5 +322,59 @@ export function WeeklySummaryCard({ email, onSaved }: { email: EmailS; onSaved: 
         </a>
       </div>
     </Card>
+  );
+}
+
+interface TestReport {
+  status: string;
+  engineers: { name: string; email: string; pending: number }[];
+  escalationTo: string[];
+  emailsSent: number;
+  emailErrors: string[];
+  emailReady: boolean;
+}
+
+/** What a test run did: who got it, by which channel, and any email errors. */
+function TestResult({ r }: { r: TestReport & { slot: "reminder" | "deadline" } }) {
+  if (!r.engineers.length)
+    return (
+      <p className="mt-3 rounded-xl bg-ios-fill/70 px-3 py-2 text-[13px] text-ios-label">
+        Nobody has unchecked nodes today, so there was no one to alert. To test, leave at least one engineer device unchecked today and try again.
+      </p>
+    );
+  const failed = (email: string) => r.emailErrors.find((e) => e.startsWith(email + ":"));
+  return (
+    <div className="mt-3 space-y-2 text-[13px]">
+      <ul className="divide-y divide-ios-separator rounded-xl bg-white ring-1 ring-black/[0.05]">
+        {r.engineers.map((e) => {
+          const err = failed(e.email);
+          return (
+            <li key={e.email} className="flex items-start gap-2 px-3 py-2">
+              <CheckCircle2 className={clsx("mt-0.5 h-4 w-4 shrink-0", err ? "text-ios-red" : "text-ios-green")} />
+              <div className="min-w-0">
+                <p className="font-semibold">
+                  {e.name} <span className="font-normal text-ios-gray">· {e.email}</span>
+                </p>
+                <p className="text-ios-gray">
+                  {e.pending} unchecked node{e.pending > 1 ? "s" : ""} · bell notice sent
+                  {r.emailReady ? (err ? " · email FAILED" : " · email sent") : " · no email (account not set up)"}
+                </p>
+              </div>
+            </li>
+          );
+        })}
+        {r.slot === "deadline" && r.escalationTo.length > 0 && (
+          <li className="flex items-start gap-2 px-3 py-2">
+            <CheckCircle2 className={clsx("mt-0.5 h-4 w-4 shrink-0", r.emailErrors.some((x) => x.startsWith("escalation")) ? "text-ios-red" : "text-ios-green")} />
+            <div className="min-w-0">
+              <p className="font-semibold">Escalation</p>
+              <p className="break-words text-ios-gray">{r.escalationTo.join(", ")}</p>
+            </div>
+          </li>
+        )}
+      </ul>
+      {r.emailErrors.length > 0 && <p className="rounded-xl bg-ios-red/10 px-3 py-2 text-[12px] text-[#D70015]">{r.emailErrors[0]}</p>}
+      <p className="text-ios-gray">Ask the engineer to check their inbox (and Spam) and the bell in the app.</p>
+    </div>
   );
 }

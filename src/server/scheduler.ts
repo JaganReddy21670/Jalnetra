@@ -67,24 +67,45 @@ export type AlertSlot = "reminder" | "deadline";
 
 const appUrl = () => (process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "");
 
+export interface AlertReport {
+  status: string;
+  /** Engineers who got (or would get) the alert. */
+  engineers: { name: string; email: string; pending: number }[];
+  /** Escalation recipients (deadline slot only). */
+  escalationTo: string[];
+  emailsSent: number;
+  emailErrors: string[];
+  emailReady: boolean;
+}
+
 /**
- * Runs one daily alert. Safe to call repeatedly: each (date, slot) runs once.
+ * Runs one daily alert. Real runs (cron) happen once per (date, slot) and respect the switches.
+ * Test runs (admin button) always run, are marked [TEST], and do not use up the day's real run.
  * In-app notifications are always created; emails go out only when an email account is set up.
  */
-export async function runDailyAlerts(slot: AlertSlot, now = new Date()): Promise<string> {
-  const { newId } = await import("./db");
+export async function runDailyAlerts(slot: AlertSlot, now = new Date(), opts: { test?: boolean } = {}): Promise<string> {
+  return (await runDailyAlertsReport(slot, now, opts)).status;
+}
+
+export async function runDailyAlertsReport(slot: AlertSlot, now = new Date(), opts: { test?: boolean } = {}): Promise<AlertReport> {
+  const test = !!opts.test;
+  const { newId, defaultAlerts } = await import("./db");
   const { buildEngineerAlert, buildEscalation, sendMail, smtpReady } = await import("./mailer");
   const { deviceType } = await import("@/lib/devices");
   const { fmtDate } = await import("@/lib/format");
-  const { defaultAlerts } = await import("./db");
 
   const date = istParts(now).date;
   const key = `${date}:${slot}`;
   const db0 = await readDB();
   const alerts = { ...defaultAlerts(), ...(db0.settings.alerts ?? {}) };
-  if (slot === "reminder" && !alerts.reminder) return "reminder off";
-  if (slot === "deadline" && !alerts.deadline) return "deadline alerts off";
-  if (db0.settings.alertLog?.[key]) return "already sent";
+  const email = db0.settings.email;
+  const report: AlertReport = { status: "", engineers: [], escalationTo: [], emailsSent: 0, emailErrors: [], emailReady: smtpReady(email) };
+
+  if (!test) {
+    if (slot === "reminder" && !alerts.reminder) return { ...report, status: "reminder off" };
+    if (slot === "deadline" && !alerts.deadline) return { ...report, status: "deadline alerts off" };
+    if (db0.settings.alertLog?.[key]) return { ...report, status: "already sent" };
+  }
 
   // Who still has unchecked active devices today?
   const checked = new Set(db0.inspections.filter((i) => i.date === date).map((i) => i.deviceId));
@@ -97,15 +118,20 @@ export async function runDailyAlerts(slot: AlertSlot, now = new Date()): Promise
     .filter((x) => x.pending.length > 0);
   const admins = db0.users.filter((u) => u.role === "admin");
   const label = fmtDate(date);
+  const tag = test ? "[TEST] " : "";
+  report.engineers = pendingByEngineer.map((p) => ({ name: p.u.name, email: p.u.email, pending: p.pending.length }));
+  if (slot === "deadline" && pendingByEngineer.length) report.escalationTo = Array.from(new Set([...admins.map((a) => a.email), ...alerts.extra])).filter(Boolean);
 
-  // Claim the slot first and write in-app notifications in the same save, so nothing runs twice.
+  // Save in-app notifications (and, for real runs, claim the slot) in one write so nothing runs twice.
   const claimed = await mutate((db) => {
-    db.settings.alertLog ??= {};
-    if (db.settings.alertLog[key]) return false;
-    db.settings.alertLog[key] = new Date().toISOString();
-    // Forget entries older than two weeks.
-    for (const k of Object.keys(db.settings.alertLog)) {
-      if ((Date.parse(date) - Date.parse(k.slice(0, 10))) / 864e5 > 14) delete db.settings.alertLog[k];
+    if (!test) {
+      db.settings.alertLog ??= {};
+      if (db.settings.alertLog[key]) return false;
+      db.settings.alertLog[key] = new Date().toISOString();
+      // Forget entries older than two weeks.
+      for (const k of Object.keys(db.settings.alertLog)) {
+        if ((Date.parse(date) - Date.parse(k.slice(0, 10))) / 864e5 > 14) delete db.settings.alertLog[k];
+      }
     }
     db.notifications ??= [];
     const at = new Date().toISOString();
@@ -116,7 +142,7 @@ export async function runDailyAlerts(slot: AlertSlot, now = new Date()): Promise
         userId: p.u.id,
         at,
         kind: slot === "reminder" ? "reminder" : "missed",
-        title: slot === "reminder" ? `${n} node${n > 1 ? "s" : ""} left to check before 5:00 PM` : `${n} node${n > 1 ? "s" : ""} missed today's 5:00 PM deadline`,
+        title: tag + (slot === "reminder" ? `${n} node${n > 1 ? "s" : ""} left to check before 5:00 PM` : `${n} node${n > 1 ? "s" : ""} missed today's 5:00 PM deadline`),
         body: p.pending.map((d) => d.name).join(", "),
         read: false,
       });
@@ -129,46 +155,44 @@ export async function runDailyAlerts(slot: AlertSlot, now = new Date()): Promise
           userId: a.id,
           at,
           kind: "escalation",
-          title: `${missed} node${missed > 1 ? "s" : ""} not checked by 5:00 PM`,
+          title: `${tag}${missed} node${missed > 1 ? "s" : ""} not checked by 5:00 PM`,
           body: pendingByEngineer.map((p) => `${p.u.name}: ${p.pending.length}`).join(" · "),
           read: false,
         });
     }
     if (db.notifications.length > 500) db.notifications = db.notifications.slice(-500);
-    db.audit.push({ at, actor: "System", action: slot === "reminder" ? "4 PM reminders" : "5 PM deadline alerts", detail: `${pendingByEngineer.length} engineer(s) with unchecked nodes` });
+    db.audit.push({
+      at,
+      actor: "System",
+      action: `${test ? "TEST " : ""}${slot === "reminder" ? "4 PM reminders" : "5 PM deadline alerts"}`,
+      detail: `${pendingByEngineer.length} engineer(s) with unchecked nodes`,
+    });
     return true;
   });
-  if (!claimed) return "already sent";
-  if (!pendingByEngineer.length) return "everyone checked; nothing to send";
+  if (!claimed) return { ...report, status: "already sent" };
+  if (!pendingByEngineer.length) return { ...report, status: "everyone checked; nothing to send" };
+  if (!smtpReady(email)) return { ...report, status: `in-app only (${pendingByEngineer.length} engineer(s)); no email account set up` };
 
-  const email = db0.settings.email;
-  if (!smtpReady(email)) return `in-app only (${pendingByEngineer.length} engineer(s)); no email account set up`;
-
-  let sent = 0;
-  const failures: string[] = [];
   const link = appUrl();
   for (const p of pendingByEngineer) {
     const m = buildEngineerAlert(slot === "reminder" ? "reminder" : "missed", p.u.name, label, p.pending, `${link}/checklist`);
     try {
-      await sendMail(email, { to: [p.u.email], ...m });
-      sent++;
+      await sendMail(email, { to: [p.u.email], ...m, subject: tag + m.subject });
+      report.emailsSent++;
     } catch (e) {
-      failures.push(`${p.u.email}: ${(e as Error).message}`);
+      report.emailErrors.push(`${p.u.email}: ${(e as Error).message}`);
     }
   }
-  if (slot === "deadline") {
-    const to = Array.from(new Set([...admins.map((a) => a.email), ...alerts.extra])).filter(Boolean);
-    if (to.length) {
-      const m = buildEscalation(label, pendingByEngineer.map((p) => ({ engineer: p.u.name, email: p.u.email, devices: p.pending, assigned: p.assigned })), link);
-      try {
-        await sendMail(email, { to, ...m });
-        sent++;
-      } catch (e) {
-        failures.push(`escalation: ${(e as Error).message}`);
-      }
+  if (slot === "deadline" && report.escalationTo.length) {
+    const m = buildEscalation(label, pendingByEngineer.map((p) => ({ engineer: p.u.name, email: p.u.email, devices: p.pending, assigned: p.assigned })), link);
+    try {
+      await sendMail(email, { to: report.escalationTo, ...m, subject: tag + m.subject });
+      report.emailsSent++;
+    } catch (e) {
+      report.emailErrors.push(`escalation: ${(e as Error).message}`);
     }
   }
-  if (failures.length)
-    await mutate((db) => db.audit.push({ at: new Date().toISOString(), actor: "System", action: "Alert email failed", detail: failures.join(" | ").slice(0, 300) })).catch(() => undefined);
-  return `${sent} email(s) sent${failures.length ? `, ${failures.length} failed` : ""}`;
+  if (report.emailErrors.length)
+    await mutate((db) => db.audit.push({ at: new Date().toISOString(), actor: "System", action: "Alert email failed", detail: report.emailErrors.join(" | ").slice(0, 300) })).catch(() => undefined);
+  return { ...report, status: `${report.emailsSent} email(s) sent${report.emailErrors.length ? `, ${report.emailErrors.length} failed` : ""}` };
 }

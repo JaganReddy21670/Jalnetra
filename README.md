@@ -97,7 +97,7 @@ Notes: functions run in Singapore next to the database (`vercel.json`). On the H
 ### Cloudflare relay (for networks that block vercel.app)
 Some ISPs and campus networks block `*.vercel.app`. The free Worker in `cloudflare-proxy/` forwards everything (cookies and redirects included) to the Vercel app:
 
-- **Live link: https://jalnetra.jaganmohanreddy3310.workers.dev**
+- **Live link: https://jalnetra.jalnetra.workers.dev**
 - Redeploy: `cd cloudflare-proxy && npx wrangler deploy`. Change `ORIGIN` in `wrangler.toml` if the Vercel URL changes.
 
 ### Render (deploys from GitHub)

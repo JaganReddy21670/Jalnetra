@@ -85,14 +85,14 @@ Vercel has no permanent disk, so on Vercel JalNetra stores everything in **Postg
 
 1. Push this repo to GitHub.
 2. On https://vercel.com choose **Add New → Project**, import the repo and click **Deploy**. The first deploy may show errors until step 3 is done.
-3. In the project, open **Storage → Create Database → Neon (Postgres)**, choose the **Mumbai** region and connect it. This adds `DATABASE_URL` automatically.
+3. In the project, open **Storage → Create Database → Neon (Postgres)**, choose the **Singapore (sin1)** region (closest to India) and connect it. This adds `DATABASE_URL` automatically.
 4. Under **Settings → Environment Variables**, add:
    - `ADMIN_SETUP_CODE`: any code you choose, needed once to create the first Administrator
    - `SESSION_SECRET`: a long random string
    - `CRON_SECRET`: a long random string (protects the weekly-email trigger)
 5. **Deployments → Redeploy.** Open `https://<project>.vercel.app`.
 
-Notes: functions run in Mumbai (`vercel.json`). On the Hobby plan, Vercel Cron runs once a day (09:00 IST), so the weekly email goes out around 9 AM on the chosen day. The Excel workbook is generated fresh on every download.
+Notes: functions run in Singapore next to the database (`vercel.json`). On the Hobby plan, Vercel Cron runs once a day (09:00 IST), so the weekly email goes out around 9 AM on the chosen day. The Excel workbook is generated fresh on every download.
 
 ### Render (deploys from GitHub)
 1. Push this repo to GitHub (it can be private).

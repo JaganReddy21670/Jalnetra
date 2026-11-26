@@ -13,3 +13,6 @@ data-backup*/
 .vscode/
 *.log
 *.tsbuildinfo
+
+.vercel
+.env*
